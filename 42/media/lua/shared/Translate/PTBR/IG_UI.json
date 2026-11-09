@@ -1,0 +1,9 @@
+{
+    "IGUI_Rem_SayFollow": "Tô logo atrás de você.",
+    "IGUI_Rem_SayStay": "Vou segurar aqui.",
+    "IGUI_Rem_SayHello": "Ei! Não atira, eu tô vivo!",
+    "IGUI_Rem_SayStatus": "%1 - vida %2%%",
+    "IGUI_Rem_SayHurt": "Argh!",
+    "IGUI_Rem_SayEnemy": "Zumbi!",
+    "IGUI_Rem_Died": "%1 morreu."
+}

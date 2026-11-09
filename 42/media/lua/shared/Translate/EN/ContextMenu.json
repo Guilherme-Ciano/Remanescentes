@@ -1,0 +1,12 @@
+{
+    "ContextMenu_Rem_Title": "Remanescentes",
+    "ContextMenu_Rem_Spawn": "Spawn survivor here",
+    "ContextMenu_Rem_SpawnBat": "Spawn survivor (bat)",
+    "ContextMenu_Rem_SpawnKnife": "Spawn survivor (knife)",
+    "ContextMenu_Rem_Follow": "Follow me",
+    "ContextMenu_Rem_Stay": "Hold this position",
+    "ContextMenu_Rem_Info": "Status",
+    "ContextMenu_Rem_Dismiss": "Remove (debug)",
+    "ContextMenu_Rem_RemoveAll": "Remove all survivors (debug)",
+    "ContextMenu_Rem_MPNotSupported": "Remanescentes: multiplayer not supported yet"
+}

@@ -1,0 +1,19 @@
+{
+    "Sandbox_Remanescentes": "Remanescentes (Sobreviventes)",
+    "Sandbox_Remanescentes_SpawnChance": "Chance de surgir (% a cada 10 min)",
+    "Sandbox_Remanescentes_SpawnChance_tooltip": "Chance, a cada 10 minutos de jogo, de surgir um sobrevivente errante perto do jogador. 0 desativa.",
+    "Sandbox_Remanescentes_MaxActive": "Maximo de sobreviventes",
+    "Sandbox_Remanescentes_MaxActive_tooltip": "Os spawns aleatorios param quando houver essa quantidade.",
+    "Sandbox_Remanescentes_NPCHealth": "Vida dos sobreviventes",
+    "Sandbox_Remanescentes_NPCHealth_tooltip": "Um zumbi comum tem cerca de 1.0-2.0.",
+    "Sandbox_Remanescentes_NPCDamageMultiplier": "Multiplicador de dano dos sobreviventes",
+    "Sandbox_Remanescentes_NPCDamageMultiplier_tooltip": "Multiplica o dano das armas dos sobreviventes contra zumbis.",
+    "Sandbox_Remanescentes_ZombieDamage": "Dano dos zumbis nos sobreviventes",
+    "Sandbox_Remanescentes_ZombieDamage_tooltip": "Vida removida de um sobrevivente a cada ataque de zumbi.",
+    "Sandbox_Remanescentes_FriendlyFire": "Jogadores podem ferir sobreviventes amigos",
+    "Sandbox_Remanescentes_FriendlyFire_tooltip": "",
+    "Sandbox_Remanescentes_DebugMenu": "Menu de spawn/comandos",
+    "Sandbox_Remanescentes_DebugMenu_tooltip": "Mostra o menu 'Remanescentes' no clique direito para criar e comandar sobreviventes. Util para testes.",
+    "Sandbox_Remanescentes_Verbose": "Log detalhado",
+    "Sandbox_Remanescentes_Verbose_tooltip": "Escreve linhas [Remanescentes] detalhadas no console.txt."
+}

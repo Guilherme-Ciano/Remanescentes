@@ -1,0 +1,8 @@
+name=Remanescentes
+id=Remanescentes
+author=Guilherme
+description=Sobreviventes humanos no mundo: lutam contra zumbis, podem seguir voce e (em breve) ter suas proprias safehouses. Fase 1 - prototipo.
+poster=poster.png
+category=features
+versionMin=42.20
+modversion=0.1.0

@@ -1,0 +1,9 @@
+{
+    "IGUI_Rem_SayFollow": "Right behind you.",
+    "IGUI_Rem_SayStay": "I'll hold here.",
+    "IGUI_Rem_SayHello": "Hey! Don't shoot, I'm alive!",
+    "IGUI_Rem_SayStatus": "%1 - health %2%%",
+    "IGUI_Rem_SayHurt": "Argh!",
+    "IGUI_Rem_SayEnemy": "Zombie!",
+    "IGUI_Rem_Died": "%1 has died."
+}

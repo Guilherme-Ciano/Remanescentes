@@ -1,0 +1,12 @@
+{
+    "ContextMenu_Rem_Title": "Remanescentes",
+    "ContextMenu_Rem_Spawn": "Criar sobrevivente aqui",
+    "ContextMenu_Rem_SpawnBat": "Criar sobrevivente (taco)",
+    "ContextMenu_Rem_SpawnKnife": "Criar sobrevivente (faca)",
+    "ContextMenu_Rem_Follow": "Me siga",
+    "ContextMenu_Rem_Stay": "Fique aqui",
+    "ContextMenu_Rem_Info": "Estado",
+    "ContextMenu_Rem_Dismiss": "Remover (debug)",
+    "ContextMenu_Rem_RemoveAll": "Remover todos os sobreviventes (debug)",
+    "ContextMenu_Rem_MPNotSupported": "Remanescentes: multiplayer ainda nao suportado"
+}

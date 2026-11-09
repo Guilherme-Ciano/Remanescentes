@@ -1,0 +1,42 @@
+VERSION = 1,
+
+option Remanescentes.SpawnChance
+{
+    type = integer, min = 0, max = 100, default = 5,
+    page = Remanescentes, translation = Remanescentes_SpawnChance,
+}
+option Remanescentes.MaxActive
+{
+    type = integer, min = 0, max = 50, default = 8,
+    page = Remanescentes, translation = Remanescentes_MaxActive,
+}
+option Remanescentes.NPCHealth
+{
+    type = double, min = 0.5, max = 20.0, default = 3.0,
+    page = Remanescentes, translation = Remanescentes_NPCHealth,
+}
+option Remanescentes.NPCDamageMultiplier
+{
+    type = double, min = 0.1, max = 10.0, default = 1.0,
+    page = Remanescentes, translation = Remanescentes_NPCDamageMultiplier,
+}
+option Remanescentes.ZombieDamage
+{
+    type = double, min = 0.0, max = 2.0, default = 0.15,
+    page = Remanescentes, translation = Remanescentes_ZombieDamage,
+}
+option Remanescentes.FriendlyFire
+{
+    type = boolean, default = false,
+    page = Remanescentes, translation = Remanescentes_FriendlyFire,
+}
+option Remanescentes.DebugMenu
+{
+    type = boolean, default = true,
+    page = Remanescentes, translation = Remanescentes_DebugMenu,
+}
+option Remanescentes.Verbose
+{
+    type = boolean, default = false,
+    page = Remanescentes, translation = Remanescentes_Verbose,
+}
