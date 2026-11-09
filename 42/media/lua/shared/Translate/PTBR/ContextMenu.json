@@ -1,12 +1,21 @@
 {
     "ContextMenu_Rem_Title": "Remanescentes",
-    "ContextMenu_Rem_Spawn": "Criar sobrevivente aqui",
-    "ContextMenu_Rem_SpawnBat": "Criar sobrevivente (taco)",
-    "ContextMenu_Rem_SpawnKnife": "Criar sobrevivente (faca)",
     "ContextMenu_Rem_Follow": "Me siga",
     "ContextMenu_Rem_Stay": "Fique aqui",
     "ContextMenu_Rem_Info": "Estado",
     "ContextMenu_Rem_Dismiss": "Remover (debug)",
-    "ContextMenu_Rem_RemoveAll": "Remover todos os sobreviventes (debug)",
-    "ContextMenu_Rem_MPNotSupported": "Remanescentes: multiplayer ainda nao suportado"
+    "ContextMenu_Rem_RemoveAll": "Remover todos os sobreviventes e grupos",
+    "ContextMenu_Rem_MPNotSupported": "Remanescentes: multiplayer ainda nao suportado",
+    "ContextMenu_Rem_Stealth": "Andar furtivo",
+    "ContextMenu_Rem_Normal": "Andar normalmente",
+    "ContextMenu_Rem_Debug": "Ferramentas de teste",
+    "ContextMenu_Rem_SpawnAlly": "Criar aliado (te segue)",
+    "ContextMenu_Rem_SpawnCivil": "Criar civil",
+    "ContextMenu_Rem_SpawnRaider": "Criar saqueador hostil",
+    "ContextMenu_Rem_GroupHereCivil": "Criar grupo de civis morando aqui",
+    "ContextMenu_Rem_GroupHereRaider": "Criar grupo de saqueadores morando aqui",
+    "ContextMenu_Rem_NearestGroup": "Info do grupo mais proximo",
+    "ContextMenu_Rem_ListGroups": "Listar todos os grupos (console)",
+    "ContextMenu_Rem_GoToGroup": "Teleportar perto do grupo mais proximo",
+    "ContextMenu_Rem_Simulate6": "Simular 6 horas fora da tela"
 }

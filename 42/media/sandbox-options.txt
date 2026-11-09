@@ -1,13 +1,8 @@
 VERSION = 1,
 
-option Remanescentes.SpawnChance
-{
-    type = integer, min = 0, max = 100, default = 5,
-    page = Remanescentes, translation = Remanescentes_SpawnChance,
-}
 option Remanescentes.MaxActive
 {
-    type = integer, min = 0, max = 50, default = 8,
+    type = integer, min = 0, max = 40, default = 12,
     page = Remanescentes, translation = Remanescentes_MaxActive,
 }
 option Remanescentes.NPCHealth
@@ -39,4 +34,55 @@ option Remanescentes.Verbose
 {
     type = boolean, default = false,
     page = Remanescentes, translation = Remanescentes_Verbose,
+}
+option Remanescentes.ZombieSightRange
+{
+    type = integer, min = 2, max = 30, default = 10,
+    page = Remanescentes, translation = Remanescentes_ZombieSightRange,
+}
+option Remanescentes.NPCNoiseMultiplier
+{
+    type = double, min = 0.0, max = 5.0, default = 1.0,
+    page = Remanescentes, translation = Remanescentes_NPCNoiseMultiplier,
+}
+option Remanescentes.FleeHealthPercent
+{
+    type = integer, min = 0, max = 90, default = 30,
+    page = Remanescentes, translation = Remanescentes_FleeHealthPercent,
+}
+option Remanescentes.Barks
+{
+    type = boolean, default = true,
+    page = Remanescentes, translation = Remanescentes_Barks,
+}
+option Remanescentes.ZombieAttackMode
+{
+    type = enum, numValues = 2, default = 1,
+    page = Remanescentes, translation = Remanescentes_ZombieAttackMode,
+    valueTranslation = Remanescentes_ZombieAttackMode,
+}
+option Remanescentes.NPCVsPlayerDamage
+{
+    type = double, min = 0.0, max = 5.0, default = 1.0,
+    page = Remanescentes, translation = Remanescentes_NPCVsPlayerDamage,
+}
+option Remanescentes.WorldGroups
+{
+    type = integer, min = 0, max = 60, default = 12,
+    page = Remanescentes, translation = Remanescentes_WorldGroups,
+}
+option Remanescentes.RaiderPercent
+{
+    type = integer, min = 0, max = 100, default = 20,
+    page = Remanescentes, translation = Remanescentes_RaiderPercent,
+}
+option Remanescentes.ScavengeDeathChance
+{
+    type = integer, min = 0, max = 100, default = 8,
+    page = Remanescentes, translation = Remanescentes_ScavengeDeathChance,
+}
+option Remanescentes.LootLeftPercent
+{
+    type = integer, min = 0, max = 100, default = 15,
+    page = Remanescentes, translation = Remanescentes_LootLeftPercent,
 }

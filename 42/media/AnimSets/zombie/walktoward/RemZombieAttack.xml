@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<animNode>
+	<m_Name>RemZombieAttack_walktoward</m_Name>
+	<m_AnimName>Zombie_Idle_Lunge</m_AnimName>
+	<m_ConditionPriority>60</m_ConditionPriority>
+	<m_BlendTime>0.25</m_BlendTime>
+	<m_SpeedScale>1.0</m_SpeedScale>
+	<m_Conditions>
+		<m_Name>RemZAttack</m_Name>
+		<m_Type>BOOL</m_Type>
+		<m_Value>true</m_Value>
+	</m_Conditions>
+</animNode>

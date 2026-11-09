@@ -1,12 +1,21 @@
 {
     "ContextMenu_Rem_Title": "Remanescentes",
-    "ContextMenu_Rem_Spawn": "Spawn survivor here",
-    "ContextMenu_Rem_SpawnBat": "Spawn survivor (bat)",
-    "ContextMenu_Rem_SpawnKnife": "Spawn survivor (knife)",
     "ContextMenu_Rem_Follow": "Follow me",
     "ContextMenu_Rem_Stay": "Hold this position",
     "ContextMenu_Rem_Info": "Status",
     "ContextMenu_Rem_Dismiss": "Remove (debug)",
-    "ContextMenu_Rem_RemoveAll": "Remove all survivors (debug)",
-    "ContextMenu_Rem_MPNotSupported": "Remanescentes: multiplayer not supported yet"
+    "ContextMenu_Rem_RemoveAll": "Remove all survivors and groups",
+    "ContextMenu_Rem_MPNotSupported": "Remanescentes: multiplayer not supported yet",
+    "ContextMenu_Rem_Stealth": "Move stealthily",
+    "ContextMenu_Rem_Normal": "Move normally",
+    "ContextMenu_Rem_Debug": "Test tools",
+    "ContextMenu_Rem_SpawnAlly": "Spawn ally (follows you)",
+    "ContextMenu_Rem_SpawnCivil": "Spawn civilian",
+    "ContextMenu_Rem_SpawnRaider": "Spawn hostile raider",
+    "ContextMenu_Rem_GroupHereCivil": "Create civilian group living here",
+    "ContextMenu_Rem_GroupHereRaider": "Create raider group living here",
+    "ContextMenu_Rem_NearestGroup": "Nearest group info",
+    "ContextMenu_Rem_ListGroups": "List all groups (console)",
+    "ContextMenu_Rem_GoToGroup": "Teleport near nearest group",
+    "ContextMenu_Rem_Simulate6": "Simulate 6 hours off-screen"
 }

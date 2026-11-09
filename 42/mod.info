@@ -1,8 +1,8 @@
 name=Remanescentes
 id=Remanescentes
 author=Guilherme
-description=Sobreviventes humanos no mundo: lutam contra zumbis, podem seguir voce e (em breve) ter suas proprias safehouses. Fase 1 - prototipo.
+description=Sobreviventes humanos vivendo no mundo: grupos com casa, saques, faccoes rivais, combate real contra zumbis e contra voce. Single player.
 poster=poster.png
 category=features
 versionMin=42.20
-modversion=0.1.0
+modversion=0.3.0

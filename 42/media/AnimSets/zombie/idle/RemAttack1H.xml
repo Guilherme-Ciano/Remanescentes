@@ -11,13 +11,13 @@
 		<m_Value>true</m_Value>
 	</m_Conditions>
 	<m_Conditions>
-		<m_Name>RemAttack</m_Name>
-		<m_Type>BOOL</m_Type>
-		<m_Value>true</m_Value>
-	</m_Conditions>
-	<m_Conditions>
 		<m_Name>RemWeapon</m_Name>
 		<m_Type>STRING</m_Type>
 		<m_Value>1h</m_Value>
+	</m_Conditions>
+	<m_Conditions>
+		<m_Name>RemAttack</m_Name>
+		<m_Type>BOOL</m_Type>
+		<m_Value>true</m_Value>
 	</m_Conditions>
 </animNode>
