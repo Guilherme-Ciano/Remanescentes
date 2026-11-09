@@ -2,9 +2,39 @@
 require "Remanescentes/Rem_Core"
 local Rem = Remanescentes
 
+-- Aparencia humana: o jogo escolhe pele podre (M_ZedBody0X_levelN) para qualquer zumbi,
+-- a menos que skinTextureName esteja definido (HumanVisual.getSkinTexture). As peles humanas
+-- sao MaleBody01..05 / FemaleBody01..05 (PopTemplateManager.init).
+function Rem.applyHumanLook(zombie, rec)
+    if not rec.skin then
+        local prefix = zombie:isFemale() and "FemaleBody0" or "MaleBody0"
+        rec.skin = prefix .. tostring(ZombRand(1, 6))
+    end
+    local visual = zombie:getHumanVisual()
+    visual:setSkinTextureName(rec.skin)
+    visual:removeBlood()
+    visual:removeDirt()
+    -- limpa sangue/sujeira das roupas (zumbis nascem com roupa suja)
+    local items = zombie:getItemVisuals()
+    local parts = BloodBodyPartType.MAX:index()
+    for i = 0, items:size() - 1 do
+        local iv = items:get(i)
+        if iv then
+            for p = 0, parts - 1 do
+                local part = BloodBodyPartType.FromIndex(p)
+                iv:setBlood(part, 0)
+                iv:setDirt(part, 0)
+            end
+        end
+    end
+    zombie:resetModel()
+end
+
 -- Liga o "modo humano" num IsoZombie. Chamado no spawn e quando o chunk recarrega.
 function Rem.activate(zombie, rec, key)
     if Rem.active[zombie] then return Rem.active[zombie] end
+
+    Rem.safe(Rem.applyHumanLook, zombie, rec)
 
     zombie:setUseless(true)        -- desliga visao/audicao/perseguicao de zumbi
     zombie:setNoTeeth(true)        -- nao morde

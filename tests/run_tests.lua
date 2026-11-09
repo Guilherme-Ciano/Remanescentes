@@ -36,6 +36,7 @@ function getGameTime() return { getWorldAgeHours = function() return 1 end } end
 function instanceof(o, cls) return o and o._class == cls end
 
 local store = {}
+BloodBodyPartType = { MAX = { index = function() return 3 end }, FromIndex = function(i) return i end }
 ModData = { getOrCreate = function(k) store[k] = store[k] or {}; return store[k] end }
 
 -- lista estilo Java
@@ -82,10 +83,27 @@ local function newZombie(x, y, z)
     function o:resetModelNextFrame() end
     function o:getPersistentOutfitID() return self.pid end
     function o:Say(s) table.insert(self.said, s) end
-    function o:pathToLocationF(x, y, z) self.path = { x, y }; self.moving = true end
+    function o:pathToLocationF(x, y, z) error("nao usar zombie:pathToLocationF (cai em walktoward)") end
     function o:pathToCharacter(c) self.path = { c.x, c.y }; self.chasing = c end
-    function o:getPathFindBehavior2() local me = self; return { cancel = function() me.path = nil; me.moving = false end } end
-    function o:isMoving() return self.moving end
+    function o:getPathFindBehavior2()
+        local me = self
+        return {
+            pathToLocationF = function(_, x, y, z) me.path = { x, y } end,
+            cancel = function() me.path = nil end,
+        }
+    end
+    function o:getVariableBoolean(k) return self.vars[k] == true end
+    function o:isFemale() return false end
+    function o:getHumanVisual()
+        local me = self
+        return { setSkinTextureName = function(_, n) me.skin = n end, removeBlood = function() end, removeDirt = function() end }
+    end
+    function o:getItemVisuals()
+        local me = self
+        local iv = { setBlood = function(_, p, v) me.cleaned = true end, setDirt = function() end }
+        return JList({ iv })
+    end
+    function o:resetModel() end
     function o:faceThisObject() end
     function o:playSound() end
     function o:splatBloodFloor() end
@@ -155,11 +173,19 @@ check(npc.z.vars.RemNPC == true and npc.z.vars.RemWeapon == "bat", "variaveis de
 check(npc.z.hp == 3.0, "vida do sandbox aplicada")
 check(Rem.recordCount() == 1, "registro salvo no ModData")
 check(npc.z.avoid == true, "sem fogo amigo por padrao")
+check(npc.z.skin and npc.z.skin:sub(1, 9) == "MaleBody0", "pele humana aplicada (" .. tostring(npc.z.skin) .. ")")
+check(npc.z.cleaned == true, "roupa limpa de sangue/sujeira")
+check(npc.rec.skin == npc.z.skin, "pele salva no registro (mesma apos load)")
 
 realPrint("2) Seguir o jogador")
 player.x, player.y = 30, 30
 tick(300)
 check(npc.z.path and npc.z.path[1] == 30, "anda ate o jogador quando longe")
+check(npc.z.vars.bPathfind == true, "forca estado pathfind (nao walktoward)")
+npc.z.vars.bPathfind = false -- jogo terminou o caminho
+player.x, player.y = 12, 12; npc.z.x, npc.z.y = 12, 13
+tick(300)
+check(npc.moving == false, "percebe que chegou e para")
 
 realPrint("3) Combate contra zumbi")
 npc.z.x, npc.z.y = 30, 31
@@ -198,6 +224,7 @@ check(Rem.recordCount() == 1, "registro continua salvo")
 local reloaded = newZombie(40, 40, 0); reloaded.pid = pid; reloaded.useless = false
 fire("OnZombieUpdate", reloaded)
 check(Rem.active[reloaded] ~= nil and reloaded.useless, "zumbi recarregado volta a ser sobrevivente")
+check(reloaded.skin == n2.rec.skin, "mesma pele depois de recarregar")
 local stranger = newZombie(41, 41, 0)
 fire("OnZombieUpdate", stranger)
 check(Rem.active[stranger] == nil, "zumbi comum nao e afetado")

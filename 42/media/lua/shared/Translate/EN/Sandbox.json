@@ -1,6 +1,6 @@
 {
     "Sandbox_Remanescentes": "Remanescentes (Survivors)",
-    "Sandbox_Remanescentes_SpawnChance": "Spawn chance (% per 10 min)",
+    "Sandbox_Remanescentes_SpawnChance": "Spawn chance per 10 minutes",
     "Sandbox_Remanescentes_SpawnChance_tooltip": "Chance every 10 in-game minutes to spawn a wandering survivor near the player. 0 disables random spawns.",
     "Sandbox_Remanescentes_MaxActive": "Max active survivors",
     "Sandbox_Remanescentes_MaxActive_tooltip": "Random spawns stop when this many survivors exist.",

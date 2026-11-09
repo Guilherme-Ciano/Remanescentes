@@ -20,14 +20,33 @@ function Rem.moveTo(npc, x, y, z, now)
     end
     npc.nextPath = now + REPATH_MS
     npc.lastPathX, npc.lastPathY = x, y
-    npc.z:pathToLocationF(x, y, z)
+    -- Nao usamos zombie:pathToLocationF(): com caminho livre ele escolhe o estado
+    -- "walktoward", que desiste na hora em zumbis useless (WalkTowardState checa
+    -- isUseless e volta para idle). O PathFindState nao checa, entao forcamos ele:
+    -- define o destino no PathFindBehavior2 e liga bPathfind (actiongroups/zombie/idle/to_pathfind.xml).
+    npc.z:getPathFindBehavior2():pathToLocationF(x, y, z)
+    npc.z:setVariable("bPathfind", true)
+    npc.moving = true
 end
 
 function Rem.stopMoving(npc)
-    if npc.lastPathX then
-        Rem.safe(function() npc.z:getPathFindBehavior2():cancel() end)
+    if npc.moving then
+        Rem.safe(function()
+            npc.z:getPathFindBehavior2():cancel()
+            npc.z:setVariable("bPathfind", false)
+        end)
+        npc.moving = false
         npc.lastPathX, npc.lastPathY = nil, nil
     end
+end
+
+-- O PathFindState desliga bPathfind sozinho ao chegar/falhar; sincronizamos o estado.
+function Rem.isMoving(npc)
+    if npc.moving and not npc.z:getVariableBoolean("bPathfind") then
+        npc.moving = false
+        npc.lastPathX, npc.lastPathY = nil, nil
+    end
+    return npc.moving
 end
 
 -- ---------------------------------------------------------------- percepcao
@@ -103,7 +122,7 @@ function Rem.think(npc, now)
     end
 
     -- wander: passeia perto de casa de vez em quando
-    if not z:isMoving() and ZombRand(40) == 0 then
+    if not Rem.isMoving(npc) and ZombRand(40) == 0 then
         local x = rec.homeX + ZombRand(-WANDER_RADIUS, WANDER_RADIUS + 1)
         local y = rec.homeY + ZombRand(-WANDER_RADIUS, WANDER_RADIUS + 1)
         local sq = getCell():getGridSquare(x, y, rec.homeZ)
