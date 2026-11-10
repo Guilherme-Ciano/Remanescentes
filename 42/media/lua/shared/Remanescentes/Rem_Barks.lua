@@ -19,7 +19,9 @@ Rem.BARKS = {
     threat = { urgent = true, n = 4, cd = 30000 },
     betrayed = { urgent = true, n = 3, cd = 0 },
 }
-local GLOBAL_CD = 6000 -- tempo minimo entre quaisquer duas falas do mesmo sobrevivente
+local B = Rem.module("Barks", {
+    GLOBAL_CD = 6000,  -- tempo minimo entre quaisquer duas falas do mesmo sobrevivente
+})
 
 -- force=true ignora cooldowns (respostas a comandos do jogador)
 function Rem.bark(npc, category, force)
@@ -31,7 +33,7 @@ function Rem.bark(npc, category, force)
     npc.barkAt = npc.barkAt or {}
     if not force then
         -- falas urgentes (ferido, fugindo, perseguido) furam o intervalo global
-        if not def.urgent and now - (npc.lastBark or -GLOBAL_CD) < GLOBAL_CD then return false end
+        if not def.urgent and now - (npc.lastBark or -B.CFG.GLOBAL_CD) < B.CFG.GLOBAL_CD then return false end
         if now - (npc.barkAt[category] or -def.cd) < def.cd then return false end
     end
     npc.lastBark = now

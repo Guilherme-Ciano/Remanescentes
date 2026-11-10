@@ -17,5 +17,22 @@
     "ContextMenu_Rem_NearestGroup": "Nearest group info",
     "ContextMenu_Rem_ListGroups": "List all groups (console)",
     "ContextMenu_Rem_GoToGroup": "Teleport near nearest group",
-    "ContextMenu_Rem_Simulate6": "Simulate 6 hours off-screen"
+    "ContextMenu_Rem_Simulate6": "Simulate 6 hours off-screen",
+    "ContextMenu_Rem_Profile": "Profile (who, attitude, reputation)",
+    "ContextMenu_Rem_FortifyNearest": "Prepare nearest group's house (barricades/stash)",
+    "ContextMenu_Rem_RepUp": "Reputation +25 with nearest group",
+    "ContextMenu_Rem_RepDown": "Reputation -25 with nearest group",
+    "ContextMenu_Rem_Reseed": "Recreate world groups (old saves)",
+    "ContextMenu_Rem_Amb_walker": "Ambient: civilian walking",
+    "ContextMenu_Rem_Amb_runner": "Ambient: civilian fleeing zombies",
+    "ContextMenu_Rem_Amb_family": "Ambient: family",
+    "ContextMenu_Rem_Amb_help": "Ambient: wounded calling for help",
+    "ContextMenu_Rem_Amb_knock": "Ambient: knocking on a door",
+    "ContextMenu_Rem_Amb_boarder": "Ambient: boarding up",
+    "ContextMenu_Rem_Amb_fight": "Ambient: fight over food",
+    "ContextMenu_Rem_Amb_scavenger": "Ambient: scavengers",
+    "ContextMenu_Rem_Amb_raider": "Ambient: raider prowling",
+    "ContextMenu_Rem_Amb_gunshot": "Ambient: distant gunshot",
+    "ContextMenu_Rem_SimDay": "Simulate 1 day (bases evolve)",
+    "ContextMenu_Rem_Relations": "Nearest group's relations (console)"
 }

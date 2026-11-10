@@ -18,20 +18,27 @@ require "Remanescentes/Rem_Core"
 require "Remanescentes/Rem_Barks"
 local Rem = Remanescentes
 
-local PERCEIVE_MS = 500
-local SCAN_RADIUS = 25
-local BITE_RANGE = 0.9
-local BITE_COOLDOWN_MS = 1500
-local ZATTACK_ANIM_MS = 700
-local HUNT_MEMORY_MS = 12000
-local HUNT_GIVEUP_DIST = 30
-local REPATH_MS = 1000
-local HIT_REACT_MS = 450
+local P = Rem.module("Perception", {
+    PERCEIVE_MS = 500,
+    SCAN_RADIUS = 25,
+    BITE_RANGE = 0.9,
+    BITE_COOLDOWN_MS = 1500,
+    ZATTACK_ANIM_MS = 700,
+    HUNT_MEMORY_MS = 12000,
+    HUNT_GIVEUP_DIST = 30,
+    REPATH_MS = 1000,
+    HIT_REACT_MS = 450,
+    -- zumbi atras do jogador troca para um sobrevivente se ele estiver bem mais perto
+    DISTRACT_DIST = 3.0,          -- sobrevivente no maximo a isso do zumbi
+    DISTRACT_MARGIN = 2.0,        -- e pelo menos isso mais perto que o jogador
+    DISTRACT_COOLDOWN_MS = 4000,  -- depois de voltar ao jogador, nao troca de novo por um tempo
+})
 
 -- [zumbi] = { npc=, lastSeen=, nextPath=, real=bool, lastOutcome=, wasAttacking= }
 Rem.hunting = Rem.hunting or {}
 local lastBite = {}
 local attackAnimEnd = {}
+local backToPlayerAt = {}  -- [zumbi] = quando voltou a mirar o jogador
 
 local function realMode()
     return Rem.cfg("ZombieAttackMode", 1) == 1
@@ -151,7 +158,8 @@ end
 
 -- ---------------------------------------------------------------- reacao ao golpe
 function Rem.hitReact(npc, now)
-    npc.hitUntil = now + HIT_REACT_MS
+    if Rem.clearRest then Rem.clearRest(npc) end
+    npc.hitUntil = now + P.CFG.HIT_REACT_MS
     npc.z:setVariable("RemHit", true)
 end
 
@@ -164,12 +172,13 @@ end
 
 -- ---------------------------------------------------------------- ataque simulado
 local function zombieBite(zombie, npc, now)
-    if now - (lastBite[zombie] or 0) < BITE_COOLDOWN_MS then return end
+    if now - (lastBite[zombie] or 0) < P.CFG.BITE_COOLDOWN_MS then return end
     lastBite[zombie] = now
     zombie:faceThisObject(npc.z)
     zombie:setVariable("RemZAttack", true)
-    attackAnimEnd[zombie] = now + ZATTACK_ANIM_MS
+    attackAnimEnd[zombie] = now + P.CFG.ZATTACK_ANIM_MS
     Rem.hitReact(npc, now)
+    Rem.emit("zombieHitNPC", npc, zombie, now)   -- mordida/arranhao (Rem_Infection)
     Rem.damageNPC(npc, Rem.cfg("ZombieDamage", 0.15))
 end
 
@@ -195,6 +204,7 @@ function Rem.updateZombieAttacks(now)
                 if target ~= h.npc.z then
                     if target ~= nil then
                         -- trocou de alvo (ex.: jogador): dentes de volta JA e esquece o npc
+                        backToPlayerAt[zombie] = now
                         drop = drop or {}; table.insert(drop, zombie); return
                     end
                     -- perdeu o alvo sozinho: re-mira enquanto lembrar
@@ -207,6 +217,7 @@ function Rem.updateZombieAttacks(now)
                 local outcome = zombie:getAttackOutcome()
                 if outcome == "success" and h.lastOutcome ~= "success" then
                     Rem.hitReact(h.npc, now)
+                    Rem.emit("zombieHitNPC", h.npc, zombie, now)   -- mordida/arranhao (Rem_Infection)
                     Rem.damageNPC(h.npc, Rem.cfg("ZombieDamage", 0.15))
                 end
                 h.lastOutcome = outcome
@@ -217,10 +228,21 @@ function Rem.updateZombieAttacks(now)
     if drop then for _, zombie in ipairs(drop) do Rem.stopHunt(zombie) end end
 end
 
+-- Zumbi que persegue o jogador pode trocar para um sobrevivente que esta bem mais perto
+-- dele (ex.: saqueador brigando com voce). So no modo real: no simulado o alvo e do jogo.
+-- Os dentes voltam assim que o zumbi mira o jogador de novo (updateZombieAttacks).
+function Rem.distractedBy(zombie, npc, d, now)
+    if not realMode() or d > P.CFG.DISTRACT_DIST then return false end
+    local target = zombie:getTarget()
+    if not target or not instanceof(target, "IsoPlayer") then return false end
+    if now - (backToPlayerAt[zombie] or -P.CFG.DISTRACT_COOLDOWN_MS) < P.CFG.DISTRACT_COOLDOWN_MS then return false end
+    return d + P.CFG.DISTRACT_MARGIN <= Rem.dist(zombie, target)
+end
+
 -- ---------------------------------------------------------------- por sobrevivente
 function Rem.perceive(npc, now)
     if now < (npc.nextPerceive or 0) then return end
-    npc.nextPerceive = now + PERCEIVE_MS
+    npc.nextPerceive = now + P.CFG.PERCEIVE_MS
     local z = npc.z
     local list = getCell():getZombieList()
     for i = 0, list:size() - 1 do
@@ -228,30 +250,30 @@ function Rem.perceive(npc, now)
         if other ~= z and not Rem.active[other] and not other:isDead()
             and math.floor(other:getZ()) == math.floor(z:getZ()) then
             local d = Rem.dist(z, other)
-            if d <= SCAN_RADIUS then
+            if d <= P.CFG.SCAN_RADIUS then
                 local h = Rem.hunting[other]
                 if h and h.npc == npc then
                     local ok, sees = pcall(function() return other:CanSee(z) end)
-                    if (ok and sees) or d <= BITE_RANGE then h.lastSeen = now end
-                    if now - h.lastSeen > HUNT_MEMORY_MS or d > HUNT_GIVEUP_DIST then
+                    if (ok and sees) or d <= P.CFG.BITE_RANGE then h.lastSeen = now end
+                    if now - h.lastSeen > P.CFG.HUNT_MEMORY_MS or d > P.CFG.HUNT_GIVEUP_DIST then
                         Rem.stopHunt(other)
                     else
                         -- no modo real, perto do alvo a IA do zumbi assume (bote/ataque);
                         -- um pathTo nessa hora atrapalharia o AttackState
-                        if now >= h.nextPath and d > (h.real and 2.0 or BITE_RANGE) then
-                            h.nextPath = now + REPATH_MS
+                        if now >= h.nextPath and d > (h.real and 2.0 or P.CFG.BITE_RANGE) then
+                            h.nextPath = now + P.CFG.REPATH_MS
                             other:pathToCharacter(z)
                         end
-                        if not h.real and d <= BITE_RANGE and not other:isOnFloor() then
+                        if not h.real and d <= P.CFG.BITE_RANGE and not other:isOnFloor() then
                             zombieBite(other, npc, now)
                         end
                     end
-                elseif not h and other:getTarget() == nil then
-                    -- zumbi livre (nao esta atras de um jogador)
-                    local bumped = d <= BITE_RANGE and not other:isOnFloor()
-                    if bumped or Rem.zombieNotices(other, npc, d) then
+                elseif not h and (other:getTarget() == nil or Rem.distractedBy(other, npc, d, now)) then
+                    -- zumbi livre, ou atras do jogador mas com este sobrevivente bem mais perto
+                    local bumped = d <= P.CFG.BITE_RANGE and not other:isOnFloor()
+                    if bumped or other:getTarget() ~= nil or Rem.zombieNotices(other, npc, d) then
                         h = Rem.startHunt(other, npc, now)
-                        h.nextPath = now + REPATH_MS
+                        h.nextPath = now + P.CFG.REPATH_MS
                         other:pathToCharacter(z)
                         if bumped and not h.real then zombieBite(other, npc, now) end
                     end
@@ -272,6 +294,9 @@ function Rem.cleanupHunting()
     local n = 0
     for _ in pairs(lastBite) do n = n + 1 end
     if n > 500 then lastBite = {} end
+    n = 0
+    for _ in pairs(backToPlayerAt) do n = n + 1 end
+    if n > 500 then backToPlayerAt = {} end
 end
 
 Events.EveryOneMinute.Add(function() Rem.safe(Rem.cleanupHunting) end)

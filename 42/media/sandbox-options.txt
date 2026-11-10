@@ -7,7 +7,7 @@ option Remanescentes.MaxActive
 }
 option Remanescentes.NPCHealth
 {
-    type = double, min = 0.5, max = 20.0, default = 3.0,
+    type = double, min = 0.5, max = 20.0, default = 2.0,
     page = Remanescentes, translation = Remanescentes_NPCHealth,
 }
 option Remanescentes.NPCDamageMultiplier
@@ -68,7 +68,7 @@ option Remanescentes.NPCVsPlayerDamage
 }
 option Remanescentes.WorldGroups
 {
-    type = integer, min = 0, max = 60, default = 12,
+    type = integer, min = 0, max = 200, default = 40,
     page = Remanescentes, translation = Remanescentes_WorldGroups,
 }
 option Remanescentes.RaiderPercent
@@ -85,4 +85,56 @@ option Remanescentes.LootLeftPercent
 {
     type = integer, min = 0, max = 100, default = 15,
     page = Remanescentes, translation = Remanescentes_LootLeftPercent,
+}
+option Remanescentes.FortifyHomes
+{
+    type = boolean, default = true,
+    page = Remanescentes, translation = Remanescentes_FortifyHomes,
+}
+option Remanescentes.NPCDifficulty
+{
+    type = enum, numValues = 3, default = 2,
+    page = Remanescentes, translation = Remanescentes_NPCDifficulty,
+    valueTranslation = Remanescentes_NPCDifficulty,
+}
+option Remanescentes.RaiderMugging
+{
+    type = boolean, default = true,
+    page = Remanescentes, translation = Remanescentes_RaiderMugging,
+}
+option Remanescentes.CollapsePace
+{
+    type = enum, numValues = 3, default = 2,
+    page = Remanescentes, translation = Remanescentes_CollapsePace,
+    valueTranslation = Remanescentes_CollapsePace,
+}
+option Remanescentes.RaiderStartDay
+{
+    type = integer, min = 0, max = 60, default = 4,
+    page = Remanescentes, translation = Remanescentes_RaiderStartDay,
+}
+option Remanescentes.AmbientDensity
+{
+    type = integer, min = 0, max = 300, default = 100,
+    page = Remanescentes, translation = Remanescentes_AmbientDensity,
+}
+option Remanescentes.NPCsTurn
+{
+    type = boolean, default = true,
+    page = Remanescentes, translation = Remanescentes_NPCsTurn,
+}
+option Remanescentes.NPCInfectionChance
+{
+    type = integer, min = 0, max = 100, default = 25,
+    page = Remanescentes, translation = Remanescentes_NPCInfectionChance,
+}
+option Remanescentes.GroupDensity
+{
+    type = integer, min = 0, max = 300, default = 100,
+    page = Remanescentes, translation = Remanescentes_GroupDensity,
+}
+option Remanescentes.BaseFallRate
+{
+    type = integer, min = 0, max = 500, default = 100,
+    page = Remanescentes, translation = Remanescentes_BaseFallRate,
 }

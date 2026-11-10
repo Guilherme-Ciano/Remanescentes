@@ -17,5 +17,22 @@
     "ContextMenu_Rem_NearestGroup": "Info do grupo mais proximo",
     "ContextMenu_Rem_ListGroups": "Listar todos os grupos (console)",
     "ContextMenu_Rem_GoToGroup": "Teleportar perto do grupo mais proximo",
-    "ContextMenu_Rem_Simulate6": "Simular 6 horas fora da tela"
+    "ContextMenu_Rem_Simulate6": "Simular 6 horas fora da tela",
+    "ContextMenu_Rem_Profile": "Ficha (quem é, atitude, reputação)",
+    "ContextMenu_Rem_FortifyNearest": "Preparar casa do grupo mais proximo (barricadas/estoque)",
+    "ContextMenu_Rem_RepUp": "Reputacao +25 com o grupo mais proximo",
+    "ContextMenu_Rem_RepDown": "Reputacao -25 com o grupo mais proximo",
+    "ContextMenu_Rem_Reseed": "Recriar grupos do mundo (saves antigos)",
+    "ContextMenu_Rem_Amb_walker": "Passagem: civil andando",
+    "ContextMenu_Rem_Amb_runner": "Passagem: civil fugindo de zumbis",
+    "ContextMenu_Rem_Amb_family": "Passagem: familia",
+    "ContextMenu_Rem_Amb_help": "Passagem: ferido pedindo socorro",
+    "ContextMenu_Rem_Amb_knock": "Passagem: batendo numa porta",
+    "ContextMenu_Rem_Amb_boarder": "Passagem: pregando tabuas",
+    "ContextMenu_Rem_Amb_fight": "Passagem: briga por comida",
+    "ContextMenu_Rem_Amb_scavenger": "Passagem: catadores",
+    "ContextMenu_Rem_Amb_raider": "Passagem: saqueador rondando",
+    "ContextMenu_Rem_Amb_gunshot": "Passagem: tiro ao longe",
+    "ContextMenu_Rem_SimDay": "Simular 1 dia (bases evoluem)",
+    "ContextMenu_Rem_Relations": "Relacoes do grupo mais proximo (console)"
 }

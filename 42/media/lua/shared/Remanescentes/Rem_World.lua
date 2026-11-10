@@ -1,9 +1,10 @@
--- Remanescentes - mundo vivo (Fase 3): grupos no papel, simulacao horaria e
--- materializacao perto do jogador.
+-- Remanescentes - mundo vivo (Fase 3): grupos no papel, semeadura, simulacao horaria
+-- fora de cena e predios saqueados. A parte "em cena" (dar/tirar corpo perto do jogador,
+-- teleporte de debug) esta em Rem_Scene.lua.
 --
 -- grupo = {
 --   id, name, faction, members = { personId... },
---   home   = { x, y, z, bid },        -- predio real (BuildingDef) onde moram
+--   home   = { x, y, z, bid, x1, y1, x2, y2 }, -- predio real (BuildingDef) e seu retangulo
 --   x, y, z,                          -- posicao do grupo (fora de cena)
 --   supplies,                         -- comida/agua em "pessoa-dias"
 --   activity = "home"|"scavenge"|"return"|"raid",
@@ -12,17 +13,22 @@
 require "Remanescentes/Rem_Core"
 require "Remanescentes/Rem_Factions"
 require "Remanescentes/Rem_Spawn"
+require "Remanescentes/Rem_Scene"
+require "Remanescentes/Rem_Timeline"
 local Rem = Remanescentes
 
-local SPAWN_RADIUS = 45      -- pessoas a menos disso do jogador ganham corpo
-local DESPAWN_RADIUS = 70    -- com corpo e mais longe que isso: volta ao papel
-local SCENE_CHECK_MS = 1500
-local START_GRACE_MS = 4000  -- apos carregar, espera os chunks re-associarem corpos salvos
-local TRAVEL_PER_HOUR = 300  -- tiles por hora de jogo, fora de cena
-local ARRIVE_DIST = 6
-local SEED_RADIUS = 350
-local SEED_MIN_DIST = 60     -- nao nasce grupo em cima do jogador
-local HOME_SPACING = 40
+local W = Rem.module("World", {
+    TRAVEL_PER_HOUR = 300,      -- tiles por hora de jogo, fora de cena
+    ARRIVE_DIST = 6,
+    SEED_RADIUS = 350,
+    SEED_MIN_DIST = 60,         -- nao nasce grupo em cima do jogador
+    HOME_SPACING = 40,
+    NOMAD_MOVE_ODDS = 24,       -- errantes: 1 em N horas (de dia) mudam de acampamento
+    ROUTINE_SCAVENGE_ODDS = 16, -- com comida sobrando: 1 em N horas (de dia) saem para saquear
+    PUNITIVE_MIN = 4,           -- milicia com pelo menos tantos membros...
+    PUNITIVE_CHANCE = 15,       -- ...(%) quando sai por comida, ataca saqueadores inimigos
+    ITEMS_PER_SUPPLY = 2,       -- itens no estoque por "pessoa-dia" de suprimento
+})
 
 -- ---------------------------------------------------------------- predios
 local function buildings()
@@ -65,20 +71,35 @@ function Rem.pickBuilding(x, y, minD, maxD, filter)
 end
 
 -- ---------------------------------------------------------------- grupos
-local GROUP_NAMES = {
+-- nomes de grupo por faccao (faccoes registradas podem trazer def.groupNames)
+W.GROUP_NAMES = W.GROUP_NAMES or {
     civis = { "Familia", "Vizinhos", "Moradores" },
     sobreviventes = { "Sobreviventes", "Bando", "Equipe" },
     saqueadores = { "Saqueadores", "Gangue", "Corvos" },
 }
 
-function Rem.createGroup(faction, x, y, bid, size)
+local function groupNamesOf(faction)
+    local names = W.GROUP_NAMES[faction]
+    if not names then
+        local fdef = Rem.FACTIONS[faction]
+        names = fdef and fdef.groupNames
+    end
+    return names or W.GROUP_NAMES.civis
+end
+
+function Rem.createGroup(faction, x, y, bid, size, def)
     local store = Rem.getStore()
+    local home = { x = x, y = y, z = 0, bid = bid }
+    if def then
+        home.x1, home.y1 = def:getX(), def:getY()
+        home.x2, home.y2 = def:getX() + def:getW(), def:getY() + def:getH()
+    end
     local g = {
         id = Rem.newId("g"),
         faction = faction,
-        name = Rem.pick(GROUP_NAMES[faction] or GROUP_NAMES.civis),
+        name = Rem.pick(groupNamesOf(faction)),
         members = {},
-        home = { x = x, y = y, z = 0, bid = bid },
+        home = home,
         x = x, y = y, z = 0,
         supplies = 2 + ZombRand(6),
         activity = "home",
@@ -91,36 +112,71 @@ function Rem.createGroup(faction, x, y, bid, size)
         table.insert(g.members, p.id)
     end
     Rem.log("grupo " .. g.id .. " (" .. faction .. ", " .. size .. " pessoas) mora em " .. x .. "," .. y)
+    Rem.emit("groupCreated", g, def)
     return g
 end
 
-local function randomFaction()
-    local raid = Rem.cfg("RaiderPercent", 20)
-    local r = ZombRand(100)
-    if r < raid then return "saqueadores" end
-    if r < raid + (100 - raid) * 0.45 then return "sobreviventes" end
+-- Sorteio da faccao de um grupo novo. Saqueadores: sandbox RaiderPercent; o resto se
+-- divide pelos pesos abaixo (seita e rara; errantes andam sozinhos).
+W.FACTION_WEIGHTS = W.FACTION_WEIGHTS or { civis = 45, sobreviventes = 38, errantes = 12, seita = 5 }
+
+-- tamanho do grupo { min, max } por faccao (safehouses: 2 a 6 moradores)
+W.GROUP_SIZE = W.GROUP_SIZE or {
+    civis = { 2, 5 }, sobreviventes = { 3, 6 }, saqueadores = { 2, 6 }, seita = { 4, 6 }, errantes = { 1, 1 },
+}
+
+-- A linha do tempo (Rem_Timeline) pesa o sorteio: sem saqueadores antes do dia de inicio
+-- deles, milicias ainda se formando nos primeiros dias.
+local function factionWeight(name)
+    local w = W.FACTION_WEIGHTS[name] or 0
+    if name == "sobreviventes" or name == "seita" then w = w * Rem.Timeline.militiaFactor() end
+    return w
+end
+
+function Rem.randomFaction(noHostile)
+    local raid = Rem.cfg("RaiderPercent", 20) * Rem.Timeline.raiderFactor()
+    if not noHostile and ZombRand(100) < raid then return "saqueadores" end
+    local names, total = {}, 0
+    for name in pairs(W.FACTION_WEIGHTS) do
+        if Rem.FACTIONS[name] and not (noHostile and Rem.Timeline.isHostileFaction(name)) then
+            table.insert(names, name)
+            total = total + factionWeight(name)
+        end
+    end
+    table.sort(names)
+    local r = ZombRandFloat(0, total)
+    for _, name in ipairs(names) do
+        r = r - factionWeight(name)
+        if r <= 0 then return name end
+    end
     return "civis"
 end
 
-local function groupSize(faction)
-    if faction == "saqueadores" then return 2 + ZombRand(4) end
-    return 1 + ZombRand(4)
+function Rem.groupSizeFor(faction)
+    local r = W.GROUP_SIZE[faction] or { 2, 4 }
+    return ZombRand(r[1], r[2] + 1)
 end
 
 local function farFromOtherHomes(_, bid, bx, by)
     if isHomeOfGroup(bid) then return false end
     for _, g in pairs(Rem.getStore().groups) do
-        if g.home and Rem.dist2(bx, by, g.home.x, g.home.y) < HOME_SPACING then return false end
+        if g.home and Rem.dist2(bx, by, g.home.x, g.home.y) < W.CFG.HOME_SPACING then return false end
     end
     return true
 end
 
 -- Cria um grupo morando num predio a [minD, maxD] do ponto.
+W.farFromOtherHomes = farFromOtherHomes   -- (Rem_Regions)
+W.isHomeOfGroup = isHomeOfGroup
+
 function Rem.seedGroupNear(x, y, minD, maxD, faction)
     local def, bx, by, bid = Rem.pickBuilding(x, y, minD, maxD, farFromOtherHomes)
     if not def then return nil end
-    faction = faction or randomFaction()
-    return Rem.createGroup(faction, bx, by, bid, groupSize(faction))
+    -- zona de graca: perto de onde voce comecou, nos primeiros dias, nada hostil
+    local graced = Rem.Timeline.protects(bx, by)
+    faction = faction or Rem.randomFaction(graced)
+    if graced and Rem.Timeline.isHostileFaction(faction) then faction = Rem.randomFaction(true) end
+    return Rem.createGroup(faction, bx, by, bid, Rem.groupSizeFor(faction), def)
 end
 
 function Rem.groupCount()
@@ -133,12 +189,20 @@ function Rem.seedWorld(player)
     local store = Rem.getStore()
     if store.seeded then return end
     store.seeded = true
-    local target = Rem.cfg("WorldGroups", 12)
+    Rem.Timeline.markStart(player)
     local made = 0
-    for _ = 1, target do
-        if Rem.seedGroupNear(player:getX(), player:getY(), SEED_MIN_DIST, SEED_RADIUS) then made = made + 1 end
+    if Rem.Regions then
+        -- Fase D1: grupos por regiao (cidade cheia, campo vazio); o resto do mapa ganha
+        -- grupos conforme voce explora (Rem_Regions)
+        made = Rem.Regions.seedAround(player)
+    else
+        local target = Rem.cfg("WorldGroups", 40)
+        for _ = 1, target do
+            if Rem.seedGroupNear(player:getX(), player:getY(), W.CFG.SEED_MIN_DIST, W.CFG.SEED_RADIUS) then made = made + 1 end
+        end
     end
     Rem.log("mundo semeado: " .. made .. " grupos")
+    Rem.emit("worldSeeded", player)
 end
 
 -- ---------------------------------------------------------------- simulacao (fora de cena)
@@ -168,25 +232,57 @@ local function killOffscene(p, reason)
 end
 
 -- Move o grupo (e as pessoas sem corpo) em direcao a (tx, ty). Retorna true se chegou.
+-- Anda "step" tiles em direcao a (tx, ty), levando as pessoas sem corpo junto.
+local function moveToward(g, members, tx, ty, step)
+    local d = Rem.dist2(g.x, g.y, tx, ty)
+    if step <= 0 then return end
+    if d <= step then
+        g.x, g.y = tx, ty
+    else
+        g.x = g.x + (tx - g.x) / d * step
+        g.y = g.y + (ty - g.y) / d * step
+    end
+    for _, p in ipairs(members) do
+        p.x = g.x + ZombRandFloat(-2, 2)
+        p.y = g.y + ZombRandFloat(-2, 2)
+    end
+end
+
+-- Viagem (D2): fora de cena o grupo anda em passos a cada 10 min de jogo (Rem.stepGroups);
+-- aqui, na hora cheia, anda so o que faltou da hora (simulacoes sem os passos, como
+-- "Simular 6 horas", andam a hora inteira). Retorna true se chegou.
 local function travel(g, members, tx, ty)
     local leader = anyOnScene(members)
     if leader then
         -- alguem com corpo: o cerebro anda de verdade; o grupo acompanha o lider
         g.x, g.y = leader.x, leader.y
     else
-        local d = Rem.dist2(g.x, g.y, tx, ty)
-        if d <= TRAVEL_PER_HOUR then
-            g.x, g.y = tx, ty
-        else
-            g.x = g.x + (tx - g.x) / d * TRAVEL_PER_HOUR
-            g.y = g.y + (ty - g.y) / d * TRAVEL_PER_HOUR
-        end
-        for _, p in ipairs(members) do
-            p.x = g.x + ZombRandFloat(-2, 2)
-            p.y = g.y + ZombRandFloat(-2, 2)
+        moveToward(g, members, tx, ty, W.CFG.TRAVEL_PER_HOUR - (g.movedThisHour or 0))
+    end
+    g.movedThisHour = 0
+    return Rem.dist2(g.x, g.y, tx, ty) <= W.CFG.ARRIVE_DIST
+end
+
+local function destOf(g)
+    if (g.activity == "scavenge" or g.activity == "raid") and g.target then return g.target.x, g.target.y end
+    if g.activity == "return" and g.home then return g.home.x, g.home.y end
+    return nil
+end
+
+-- Passo de viagem (a cada 10 min de jogo): grupos a caminho, sem ninguem em cena.
+function Rem.stepGroups(minutes)
+    local step = W.CFG.TRAVEL_PER_HOUR * minutes / 60
+    for _, g in pairs(Rem.getStore().groups) do
+        local tx, ty = destOf(g)
+        if tx then
+            local members = membersOf(g)
+            if #members > 0 and not anyOnScene(members) then
+                local before = Rem.dist2(g.x, g.y, tx, ty)
+                moveToward(g, members, tx, ty, step)
+                g.movedThisHour = (g.movedThisHour or 0) + math.min(step, before)
+            end
         end
     end
-    return Rem.dist2(g.x, g.y, tx, ty) <= ARRIVE_DIST
 end
 
 local function chooseScavengeTarget(g)
@@ -196,16 +292,25 @@ local function chooseScavengeTarget(g)
     end)
     if not def then return false end
     g.activity = "scavenge"
-    g.target = { x = bx, y = by, z = 0, bid = bid }
+    g.target = { x = bx, y = by, z = 0, bid = bid,
+        x1 = def:getX(), y1 = def:getY(), x2 = def:getX() + def:getW(), y2 = def:getY() + def:getH() }
     g.arrivedAt = nil
     Rem.debug("grupo " .. g.id .. " saiu para saquear " .. bx .. "," .. by)
     return true
 end
 
-local function chooseRaidTarget(g)
+-- Alvo de ataque: grupo inimigo (relacao ruim, Rem_Relations; sem esse modulo, faccao
+-- hostil). punitive = milicia atacando saqueadores.
+local function isEnemy(g, other)
+    if Rem.relation then return Rem.relation(g, other) <= Rem.Relations.CFG.ENEMY_AT end
+    return Rem.factionsHostile(g.faction, other.faction)
+end
+
+local function chooseRaidTarget(g, punitive)
+    if g.faction == "saqueadores" and Rem.Timeline.raiderFactor() <= 0 then return false end   -- ainda nao se organizaram
     local best, bestD = nil, 250
     for _, other in pairs(Rem.getStore().groups) do
-        if other ~= g and other.home and Rem.factionsHostile(g.faction, other.faction) then
+        if other ~= g and other.home and isEnemy(g, other) and (not punitive or other.faction == "saqueadores") then
             local d = Rem.dist2(g.home.x, g.home.y, other.home.x, other.home.y)
             if d < bestD then best, bestD = other, d end
         end
@@ -222,9 +327,16 @@ end
 local function finishScavenge(g, members, hour)
     local store = Rem.getStore()
     local bid = g.target and g.target.bid
-    local gain = 1 + ZombRand(5)
-    if bid and store.looted[bid] then gain = math.floor(gain / 3) end
-    g.supplies = g.supplies + gain
+    if anyOnScene(members) then
+        -- saque em cena: o ganho sao os itens que eles pegaram de verdade nos armarios
+        -- (contados quando guardam no estoque de casa, ver Rem_Scavenge)
+    else
+        local gain = 1 + ZombRand(5)
+        if bid and store.looted[bid] then gain = math.floor(gain / 3) end
+        g.supplies = g.supplies + gain
+        -- itens que vao aparecer no estoque da casa quando ela carregar
+        g.pendingItems = (g.pendingItems or 0) + gain * W.CFG.ITEMS_PER_SUPPLY
+    end
     if bid then store.looted[bid] = hour end
     -- risco: cada saque pode custar alguem (so quem nao esta em cena)
     if ZombRand(100) < Rem.cfg("ScavengeDeathChance", 8) then
@@ -244,6 +356,7 @@ local function resolveRaid(g, members)
         local vMembers = membersOf(victim)
         local attack = #members + ZombRandFloat(0, 2)
         local defend = #vMembers + ZombRandFloat(0, 2) + 0.5 -- defender a casa ajuda
+        if Rem.allyHelp then defend = defend + Rem.allyHelp(victim) end   -- aliados por perto (D4)
         local loser, loserMembers, winner = victim, vMembers, g
         if defend > attack then loser, loserMembers, winner = g, members, victim end
         local losses = 1 + ZombRand(2)
@@ -252,9 +365,31 @@ local function resolveRaid(g, members)
         loser.supplies = loser.supplies - stolen
         winner.supplies = winner.supplies + stolen
         Rem.log("ataque: grupo " .. g.id .. " x " .. victim.id .. " -> venceu " .. winner.id)
+        Rem.emit("raidResolved", g, victim, winner)
+        -- (D3) atacantes acabaram com o grupo: tomam a base dele (fortificacoes e estoque)
+        if winner == g and #membersOf(victim) == 0 and victim.home and victim.home.x1 then
+            g.oldHome = g.home
+            g.home = victim.home
+            Rem.log("grupo " .. g.id .. " (" .. g.faction .. ") tomou a base do grupo " .. victim.id)
+            Rem.emit("baseTaken", g, victim)
+        end
     end
     g.activity = "return"
     g.target = nil
+end
+
+-- Errantes nao tem casa fixa: de tempos em tempos escolhem outro predio longe e vao ate la.
+function Rem.moveCamp(g)
+    local def, bx, by, bid = Rem.pickBuilding(g.home.x, g.home.y, 80, 250, function(_, b)
+        return not isHomeOfGroup(b)
+    end)
+    if not def then return false end
+    g.home = { x = bx, y = by, z = 0, bid = bid,
+        x1 = def:getX(), y1 = def:getY(), x2 = def:getX() + def:getW(), y2 = def:getY() + def:getH() }
+    g.activity = "return"
+    g.target = nil
+    Rem.debug("errantes " .. g.id .. " mudaram o acampamento para " .. bx .. "," .. by)
+    return true
 end
 
 function Rem.simulateGroup(g, hour)
@@ -281,8 +416,17 @@ function Rem.simulateGroup(g, hour)
     if g.activity == "home" then
         travel(g, members, g.home.x, g.home.y)
         local low = g.supplies < n * 2
+        if g.faction == "errantes" and daytime and ZombRand(W.CFG.NOMAD_MOVE_ODDS) == 0
+            and Rem.moveCamp(g) then
+            return
+        end
         if low and daytime and ZombRand(3) == 0 then
             if g.faction == "saqueadores" and ZombRand(100) < 40 and chooseRaidTarget(g) then return end
+            if g.faction == "sobreviventes" and n >= W.CFG.PUNITIVE_MIN and ZombRand(100) < W.CFG.PUNITIVE_CHANCE
+                and chooseRaidTarget(g, true) then return end
+            chooseScavengeTarget(g)
+        elseif not low and daytime and n >= 2 and ZombRand(W.CFG.ROUTINE_SCAVENGE_ODDS) == 0 then
+            -- de tempos em tempos saem para aumentar o estoque, mesmo sem fome
             chooseScavengeTarget(g)
         end
     elseif g.activity == "scavenge" or g.activity == "raid" then
@@ -318,12 +462,18 @@ function Rem.simulateWorld(hours)
             if g and g.home and g.home.bid then store.abandoned[g.home.bid] = hour end
             store.groups[id] = nil
             Rem.log("grupo " .. id .. " acabou")
+            if g then Rem.emit("groupRemoved", g) end
         end
+        Rem.emit("worldHour", hour)
     end
 end
 
 Events.EveryHours.Add(function()
     if Rem.isAuthority() then Rem.simulateWorld(1) end
+end)
+
+Events.EveryTenMinutes.Add(function()
+    if Rem.isAuthority() then Rem.safe(Rem.stepGroups, 10) end
 end)
 
 -- Mundo continua crescendo: se houver poucos grupos, nasce um novo longe do jogador.
@@ -334,6 +484,12 @@ Events.EveryDays.Add(function()
     if Rem.groupCount() < Rem.cfg("WorldGroups", 12) then
         Rem.seedGroupNear(player:getX(), player:getY(), 150, 450)
     end
+    -- com o tempo, saqueadores novos se formam (mesmo com o mundo "cheio")
+    local rf = Rem.Timeline.raiderFactor()
+    if rf > 0 and Rem.groupCount() < Rem.cfg("WorldGroups", 12) + Rem.Timeline.CFG.EXTRA_GROUPS
+        and ZombRand(100) < Rem.Timeline.CFG.LATE_RAIDER_CHANCE * rf then
+        Rem.seedGroupNear(player:getX(), player:getY(), 150, 450, "saqueadores")
+    end
 end)
 
 -- ---------------------------------------------------------------- casas saqueadas
@@ -342,6 +498,8 @@ end)
 Events.OnFillContainer.Add(function(roomType, containerType, container)
     if not Rem.isAuthority() then return end
     Rem.safe(function()
+        -- o 3o argumento as vezes e um ItemPickerContainer (mochila de zumbi), nao um conteiner
+        if not instanceof(container, "ItemContainer") then return end
         local sq = container:getSourceGrid()
         local b = sq and sq:getBuilding()
         local def = b and b:getDef()
@@ -350,68 +508,6 @@ Events.OnFillContainer.Add(function(roomType, containerType, container)
             container:removeAllItems()
         end
     end)
-end)
-
--- ---------------------------------------------------------------- materializacao
-local startedAt = nil
-
-local function findZombieByPid(pid)
-    local list = getCell():getZombieList()
-    for i = 0, list:size() - 1 do
-        local z = list:get(i)
-        if z:getPersistentOutfitID() == pid and not z:isDead() then return z end
-    end
-    return nil
-end
-
-function Rem.updateScene(player, now)
-    local store = Rem.getStore()
-    local cap = Rem.cfg("MaxActive", 12)
-    local px, py = player:getX(), player:getY()
-
-    -- tira corpo de quem ficou longe (seguidores nunca)
-    local far = nil
-    for _, npc in pairs(Rem.active) do
-        if npc.rec.mode ~= "follow" and Rem.dist2(px, py, npc.z:getX(), npc.z:getY()) > DESPAWN_RADIUS then
-            far = far or {}
-            table.insert(far, npc)
-        end
-    end
-    if far then for _, npc in ipairs(far) do Rem.dematerialize(npc) end end
-
-    -- da corpo a quem chegou perto (mais perto primeiro)
-    local cand = {}
-    for _, rec in pairs(store.people) do
-        if not rec.onScene and rec.x then
-            local d = Rem.dist2(px, py, rec.x, rec.y)
-            if d < SPAWN_RADIUS then table.insert(cand, { rec = rec, d = d }) end
-        end
-    end
-    table.sort(cand, function(a, b) return a.d < b.d end)
-    for _, c in ipairs(cand) do
-        if Rem.activeCount >= cap then break end
-        local rec = c.rec
-        local zombie = rec.pid and findZombieByPid(rec.pid)
-        if zombie and not Rem.active[zombie] then
-            Rem.activate(zombie, rec)
-        elseif getCell():getGridSquare(math.floor(rec.x), math.floor(rec.y), math.floor(rec.z or 0)) then
-            rec.pid = nil
-            Rem.materialize(rec)
-        end
-    end
-end
-
-local nextScene = 0
-Events.OnTick.Add(function()
-    if not Rem.isAuthority() then return end
-    local now = Rem.nowMs()
-    if not startedAt then startedAt = now end
-    if now < nextScene or now - startedAt < START_GRACE_MS then return end
-    nextScene = now + SCENE_CHECK_MS
-    local player = getPlayer()
-    if not player or player:isDead() then return end
-    Rem.safe(Rem.seedWorld, player)
-    Rem.safe(Rem.updateScene, player, now)
 end)
 
 -- ---------------------------------------------------------------- consultas (debug/UI)
@@ -423,3 +519,32 @@ function Rem.nearestGroup(x, y)
     end
     return best, bestD
 end
+
+-- ---------------------------------------------------------------- recriar grupos (teste)
+-- Para saves antigos: tira todos os grupos (e seus membros) e semeia o mundo de novo.
+-- Pessoas sem grupo (seus aliados, sobreviventes criados no menu) ficam.
+function Rem.reseedWorld(player)
+    local store = Rem.getStore()
+    local gone = {}
+    for _, npc in pairs(Rem.active) do
+        if npc.rec.groupId then table.insert(gone, npc) end
+    end
+    for _, npc in ipairs(gone) do Rem.dismiss(npc) end
+    for id, rec in pairs(store.people) do
+        if rec.groupId then Rem.removePerson(id) end
+    end
+    local groups = {}
+    for _, g in pairs(store.groups) do table.insert(groups, g) end
+    store.groups = {}
+    for _, g in ipairs(groups) do Rem.emit("groupRemoved", g) end
+    store.seeded = false
+    store.regions = {}
+    Rem.seedWorld(player)
+    return Rem.groupCount()
+end
+
+Rem.registerDebugOption("ContextMenu_Rem_Reseed", function(x, y, z, player)
+    local n = Rem.reseedWorld(player)
+    player:Say(n .. " grupos novos no mundo.")
+end)
+

@@ -5,6 +5,10 @@ require "Remanescentes/Rem_Factions"
 require "Remanescentes/Rem_Barks"
 local Rem = Remanescentes
 
+local S = Rem.module("Spawn", {
+    FREE_SQUARE_RADIUS = 4,     -- materializar: busca quadrado livre ate essa distancia
+})
+
 -- ---------------------------------------------------------------- pessoa (dados)
 -- opts: name, faction, groupId, item, wtype, outfit, mode, stealth, x, y, z, hostileToPlayer
 function Rem.newPerson(opts)
@@ -12,7 +16,7 @@ function Rem.newPerson(opts)
     local faction = opts.faction or "civis"
     local loadout = Rem.pick(Rem.LOADOUTS)
     if opts.item then loadout = { item = opts.item, wtype = opts.wtype or "1h" } end
-    local maxH = Rem.cfg("NPCHealth", 3.0)
+    local maxH = Rem.cfg("NPCHealth", 2.0)
     local p = {
         id = Rem.newId("p"),
         name = opts.name or Rem.pick(Rem.NAMES),
@@ -32,6 +36,7 @@ function Rem.newPerson(opts)
         onScene = false,
     }
     Rem.getStore().people[p.id] = p
+    Rem.emit("personCreated", p, opts)
     return p
 end
 
@@ -62,11 +67,96 @@ function Rem.applyHumanLook(zombie, rec)
     zombie:resetModel()
 end
 
+-- ---------------------------------------------------------------- roupa x genero
+-- O jogo separa as roupas de homem e de mulher (media/clothing/clothing.xml). Pedir uma
+-- roupa que nao existe para o genero (ex.: mulher "Mechanic") cria o zumbi PELADO.
+-- Por isso o genero e decidido antes, e a roupa e trocada por uma equivalente se preciso.
+Rem.OUTFIT_FALLBACK = {
+    Mechanic = { "Fossoil", "Generic03" },
+    ConstructionWorker = { "Fossoil", "Generic01" },
+    Fisherman = { "Camper", "Generic02" },
+    Hunter = { "Camper", "Survivalist" },
+    Priest = { "Classy", "Generic05" },
+    Security = { "Police", "Generic01" },
+    Thug = { "Biker", "Generic02" },
+    Veteran = { "ArmyCamoGreen", "Survivalist" },
+    OfficeWorkerSkirt = { "OfficeWorker", "Generic01" },
+    OfficeWorker = { "OfficeWorkerSkirt", "Generic01" },
+}
+Rem.OUTFIT_SAFE = { "Generic01", "Generic02", "Generic03", "Tourist" }
+-- Se getAllOutfits nao existir: roupas de um genero so (B42.21/42.22, clothing.xml)
+Rem.OUTFIT_ONE_GENDER = {
+    male = { ConstructionWorker = true, Fisherman = true, Hunter = true, Mechanic = true, Priest = true,
+             Security = true, Thug = true, Veteran = true, OfficeWorker = true },
+    female = { OfficeWorkerSkirt = true },
+}
+
+local outfitSets = false
+local function outfitsOf(female)
+    if outfitSets == false then
+        outfitSets = nil
+        pcall(function()
+            local s = { [true] = {}, [false] = {} }
+            for _, fem in ipairs({ true, false }) do
+                local list = getAllOutfits(fem)
+                for i = 0, list:size() - 1 do s[fem][tostring(list:get(i))] = true end
+            end
+            outfitSets = s
+        end)
+    end
+    return outfitSets and outfitSets[female == true] or nil
+end
+
+-- (testes / recarregar a lista do jogo)
+function Rem.resetOutfitCache() outfitSets = false end
+
+function Rem.outfitValid(name, female)
+    if not name then return false end
+    local set = outfitsOf(female)
+    if set then return set[name] == true end
+    if female then return not Rem.OUTFIT_ONE_GENDER.male[name] end
+    return not Rem.OUTFIT_ONE_GENDER.female[name]
+end
+
+-- Garante genero decidido e roupa que existe para ele. Retorna a roupa.
+function Rem.ensureOutfit(rec)
+    if rec.female == nil then rec.female = ZombRand(2) == 0 end
+    if Rem.outfitValid(rec.outfit, rec.female) then return rec.outfit end
+    local tried = {}
+    for _, o in ipairs(Rem.OUTFIT_FALLBACK[rec.outfit or ""] or {}) do table.insert(tried, o) end
+    local fdef = Rem.FACTIONS and Rem.FACTIONS[rec.faction]
+    for _, o in ipairs((fdef and fdef.outfits) or {}) do table.insert(tried, o) end
+    for _, o in ipairs(Rem.OUTFIT_SAFE) do table.insert(tried, o) end
+    for _, o in ipairs(tried) do
+        if Rem.outfitValid(o, rec.female) then
+            Rem.debug(tostring(rec.name) .. ": roupa " .. tostring(rec.outfit) .. " nao existe para "
+                .. (rec.female and "mulher" or "homem") .. ", usando " .. o)
+            rec.outfit = o
+            return o
+        end
+    end
+    rec.outfit = "Generic01"
+    return rec.outfit
+end
+
+-- Corpo sem nenhuma roupa (saves com o bug antigo): veste de novo.
+local function dressIfNaked(zombie, rec)
+    local n = 1
+    pcall(function() n = zombie:getItemVisuals():size() end)
+    if n > 0 then return false end
+    rec.female = zombie:isFemale()
+    Rem.ensureOutfit(rec)
+    zombie:dressInNamedOutfit(rec.outfit)
+    Rem.debug("vestido de novo: " .. tostring(rec.name) .. " (" .. rec.outfit .. ")")
+    return true
+end
+
 -- ---------------------------------------------------------------- ativar um corpo
 -- Liga o "modo humano" num IsoZombie para a pessoa rec.
 function Rem.activate(zombie, rec)
     if Rem.active[zombie] then return Rem.active[zombie] end
 
+    Rem.safe(dressIfNaked, zombie, rec)   -- antes de ler o pid: vestir pode troca-lo
     Rem.safe(Rem.applyHumanLook, zombie, rec)
     zombie:setUseless(true)        -- desliga visao/audicao/perseguicao de zumbi
     zombie:setNoTeeth(true)        -- nao morde
@@ -77,6 +167,10 @@ function Rem.activate(zombie, rec)
     zombie:setVariable("RemHit", false)
     zombie:setVariable("RemRun", false)
     zombie:setVariable("RemSneak", rec.stealth == true)
+    zombie:setVariable("RemRest", "")
+    zombie:setVariable("RemGun", "")
+    zombie:setVariable("RemAim", false)
+    zombie:setVariable("RemShoot", false)
 
     if rec.item then
         local item = instanceItem(rec.item)
@@ -86,7 +180,7 @@ function Rem.activate(zombie, rec)
             zombie:addItemToSpawnAtDeath(instanceItem(rec.item))
         end
     end
-    zombie:setHealth(rec.hp or rec.maxHealth or Rem.cfg("NPCHealth", 3.0))
+    zombie:setHealth(rec.hp or rec.maxHealth or Rem.cfg("NPCHealth", 2.0))
     zombie:resetModelNextFrame()
 
     rec.pid = zombie:getPersistentOutfitID()
@@ -99,6 +193,7 @@ function Rem.activate(zombie, rec)
         nextThink = 0, nextPath = 0, nextAggro = 0,
         attackUntil = 0, hitAt = 0, attackTarget = nil, nextAttack = 0,
         hitUntil = 0,
+        activatedAt = Rem.nowMs(),
         lastPathX = nil, lastPathY = nil,
         lastSay = 0,
         running = false,
@@ -108,6 +203,7 @@ function Rem.activate(zombie, rec)
     Rem.activeCount = Rem.activeCount + 1
     Rem.applyFriendlyFire(npc)
     Rem.debug("ativado " .. tostring(rec.name) .. " (" .. tostring(rec.faction) .. ") id=" .. rec.id)
+    Rem.emit("npcActivated", npc)
     return npc
 end
 
@@ -124,6 +220,7 @@ function Rem.deactivate(zombie)
         Rem.activeCount = math.max(0, Rem.activeCount - 1)
         npc.rec.onScene = false
         if Rem.releaseHunters then Rem.releaseHunters(npc) end
+        Rem.emit("npcDeactivated", npc)
     end
 end
 
@@ -137,7 +234,7 @@ end
 -- ---------------------------------------------------------------- materializar
 local function findFreeSquare(x, y, z)
     local cell = getCell()
-    for r = 0, 4 do
+    for r = 0, S.CFG.FREE_SQUARE_RADIUS do
         for dx = -r, r do
             for dy = -r, r do
                 if math.abs(dx) == r or math.abs(dy) == r then
@@ -155,8 +252,9 @@ function Rem.materialize(rec)
     if not Rem.isAuthority() or rec.onScene then return nil end
     local sq = findFreeSquare(rec.x, rec.y, math.floor(rec.z or 0))
     if not sq then return nil end
-    local list = addZombiesInOutfit(sq:getX(), sq:getY(), sq:getZ(), 1, rec.outfit or "Generic01",
-        rec.female == nil and 50 or (rec.female and 100 or 0),
+    Rem.ensureOutfit(rec)                  -- genero decidido + roupa que existe para ele
+    local list = addZombiesInOutfit(sq:getX(), sq:getY(), sq:getZ(), 1, rec.outfit,
+        rec.female and 100 or 0,
         false, false, false, false, false, false, rec.hp or rec.maxHealth or 3.0)
     if not list or list:size() == 0 then
         Rem.log("falha ao materializar " .. tostring(rec.name))
@@ -214,8 +312,11 @@ function Rem.dismissAll()
     for _, npc in pairs(Rem.active) do table.insert(list, npc) end
     for _, npc in ipairs(list) do Rem.dismiss(npc) end
     local store = Rem.getStore()
+    local people, groups = store.people, store.groups
     store.people = {}
     store.groups = {}
+    for _, p in pairs(people) do Rem.emit("personRemoved", p) end
+    for _, g in pairs(groups) do Rem.emit("groupRemoved", g) end
     -- seeded continua true: o mundo nao ressemeia na hora (so cresce pelo EveryDays)
     Rem.log("todas as pessoas e grupos removidos")
 end
@@ -275,6 +376,8 @@ Events.OnZombieDead.Add(function(zombie)
     if player and Rem.dist(player, zombie) < 30 and Rem.isFriendly(npc) then
         player:Say(getText("IGUI_Rem_Died", npc.rec.name or "?"))
     end
+    -- ainda ativo e com a pessoa no store: quem ouve pode ler tudo
+    Rem.emit("npcDied", npc)
     Rem.deactivate(zombie)
     Rem.removePerson(npc.rec.id)
 end)

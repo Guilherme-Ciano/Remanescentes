@@ -9,10 +9,21 @@
 --   * em cena: perto do jogador, cada pessoa ganha um corpo (IsoZombie) controlado pelo
 --     cerebro; longe, o corpo e removido e a pessoa volta a ser so dados.
 
+--
+-- Pontos de extensao (para modulos novos):
+--   Rem.on/off/emit           barramento de eventos (Rem_Events.lua)
+--   Rem.registerBehavior      comportamentos do cerebro (Rem_Brain.lua)
+--   Rem.registerFaction       faccoes (Rem_Factions.lua)
+--   Rem.registerDebugOption / Rem.registerNpcOption   menu de clique direito (Rem_Registry.lua)
+--   Rem.<Modulo>.CFG          constantes de ajuste de cada modulo (Rem.module)
+
 Remanescentes = Remanescentes or {}
 local Rem = Remanescentes
 
-Rem.VERSION = "0.3.0"
+require "Remanescentes/Rem_Events"
+require "Remanescentes/Rem_Registry"
+
+Rem.VERSION = "0.7.0"
 Rem.MODDATA_KEY = "Remanescentes"
 
 -- Pessoas com corpo agora: [IsoZombie] = npc (estado de runtime, nao salvo)
@@ -24,6 +35,18 @@ function Rem.cfg(name, default)
     local sv = SandboxVars and SandboxVars.Remanescentes
     if sv and sv[name] ~= nil then return sv[name] end
     return default
+end
+
+-- Dificuldade dos sobreviventes (sandbox NPCDifficulty: 1 facil, 2 normal, 3 dificil).
+-- dmg: multiplica o dano em voce; acc: soma na chance de acerto dos tiros;
+-- sight: multiplica o alcance de visao contra voce.
+Rem.DIFFICULTY = {
+    { dmg = 0.6, acc = -15, sight = 0.8 },
+    { dmg = 1.0, acc = 0, sight = 1.0 },
+    { dmg = 1.4, acc = 10, sight = 1.15 },
+}
+function Rem.difficulty()
+    return Rem.DIFFICULTY[Rem.cfg("NPCDifficulty", 2)] or Rem.DIFFICULTY[2]
 end
 
 -- ---------------------------------------------------------------- log
@@ -53,6 +76,26 @@ end
 
 function Rem.worldHours()
     return getGameTime():getWorldAgeHours()
+end
+
+-- ---------------------------------------------------------------- modulos
+-- Tabela publica de um modulo (Rem.Brain, Rem.World...) com as constantes de ajuste em
+-- .CFG. defaults so preenche chaves que ainda nao existem: outro modulo ou um teste pode
+-- ajustar Rem.Brain.CFG.THINK_MS antes ou depois do carregamento. Os modulos leem
+-- M.CFG.<CHAVE> no momento do uso.
+function Rem.module(name, defaults)
+    local m = Rem[name]
+    if type(m) ~= "table" then
+        m = {}
+        Rem[name] = m
+    end
+    m.CFG = m.CFG or {}
+    if defaults then
+        for k, v in pairs(defaults) do
+            if m.CFG[k] == nil then m.CFG[k] = v end
+        end
+    end
+    return m
 end
 
 -- ---------------------------------------------------------------- dados persistentes
@@ -117,6 +160,7 @@ function Rem.removePerson(id)
             end
         end
     end
+    if p then Rem.emit("personRemoved", p) end
 end
 
 function Rem.personCount()
@@ -191,3 +235,6 @@ Events.OnInitGlobalModData.Add(function(isNewGame)
     for _ in pairs(store.groups) do g = g + 1 end
     Rem.log("v" .. Rem.VERSION .. " carregado. Pessoas: " .. Rem.personCount() .. ", grupos: " .. g)
 end)
+
+-- Opcoes padrao do menu (registradas aqui para virem antes das de outros modulos).
+require "Remanescentes/Rem_Commands"

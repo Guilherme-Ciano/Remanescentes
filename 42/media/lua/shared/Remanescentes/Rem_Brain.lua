@@ -1,119 +1,131 @@
 -- Remanescentes - cerebro: decide o que cada sobrevivente em cena faz.
 -- Roda no OnTick, mas cada sobrevivente so "pensa" a cada THINK_MS.
 --
--- Prioridades:
+-- Prioridades (Rem.think):
 --   0. levando golpe / animacao de ataque -> espera
---   1. vida baixa e inimigo perto          -> FUGIR (correndo)
+--   1. vida baixa, em desvantagem ou medo  -> FUGIR (correndo)
 --   2. inimigo ao alcance                  -> ATACAR
 --   3. inimigo perto e vale a pena         -> IR ATE ELE
---   4. ordem (seguir/ficar) ou rotina do grupo (casa/saque/volta)
---   5. nada a fazer                        -> OCIOSO
+--   4. comportamentos registrados (Rem.registerBehavior), em ordem crescente de priority;
+--      o primeiro que retornar true encerra o think. Padrao (Rem_Behaviors.lua):
+--        100 follow   seguir o jogador
+--        200 stay     ficar no lugar
+--        300 group    rotina do grupo (casa/saque/volta)
+--        900 wander   passear perto de "casa" / ocioso
 -- Inimigos: zumbis; sobreviventes de faccao rival; o jogador, se hostil e visivel.
+--
+-- Zumbis so viram inimigos se forem AMEACA (exceto para o temperamento agressivo):
+--   * colado no sobrevivente; ou
+--   * percebeu o sobrevivente e esta vindo; ou
+--   * (amigos do jogador) atacando o jogador por perto; ou
+--   * (amigos do jogador) o jogador comecou a briga ha pouco e o zumbi esta perto dele.
+-- Um zumbi distraido passando longe e ignorado.
+--
+-- Comportamento novo (ex.: num modulo de necessidades):
+--   Rem.registerBehavior({ name = "comer", priority = 250, run = function(npc, ctx, now)
+--       if not estaComFome(npc) then return false end
+--       Rem.hangAround(npc, x, y, z, now, 1); return true
+--   end })
+-- ctx = { enemy = inimigo ou nil, dist = distancia dele, temper = temperamento, player = getPlayer() }
 require "Remanescentes/Rem_Core"
 require "Remanescentes/Rem_Factions"
 require "Remanescentes/Rem_Spawn"
 require "Remanescentes/Rem_Barks"
 require "Remanescentes/Rem_Perception"
 require "Remanescentes/Rem_Combat"
+require "Remanescentes/Rem_Movement"
+require "Remanescentes/Rem_Behaviors"
+require "Remanescentes/Rem_Awareness"
 local Rem = Remanescentes
 
-local THINK_MS = 250
-local SCAN_RADIUS = 12
-local ENGAGE_RADIUS = 6
-local STEALTH_ENGAGE = 3
-local HOSTILE_SIGHT = 14        -- ate onde um hostil enxerga o jogador/rivais
-local FOLLOW_DIST = 3
-local RUN_DIST = 7
-local HOME_DIST = 2
-local WANDER_RADIUS = 5
-local FLEE_DIST = 9
-local SAFE_DIST = 10
-local REPATH_MS = 1000
-local RUN_NOISE_MS = 1000
-local RUN_NOISE_RADIUS = 7
-local ARRIVE_DIST = 4
+local B = Rem.module("Brain", {
+    THINK_MS = 250,
+    SCAN_RADIUS = 12,
+    ENGAGE_RADIUS = 6,
+    STEALTH_ENGAGE = 3,
+    HOSTILE_SIGHT = 14,         -- ate onde um hostil enxerga o jogador/rivais
+    SAFE_DIST = 10,             -- fugindo: para de fugir com o inimigo mais longe que isso
+    RUN_NOISE_MS = 1000,
+    RUN_NOISE_RADIUS = 7,
+    CLOSE_THREAT = 2.2,         -- zumbi a essa distancia e sempre ameaca
+    THREAT_RADIUS = 8,          -- zumbi que percebeu o sobrevivente, ate essa distancia
+    GUARD_RADIUS = 5,           -- zumbi atras do jogador, a essa distancia do jogador
+    ASSIST_RADIUS = 7,          -- jogador brigando: zumbis a essa distancia dele
+    PLAYER_FIGHT_MS = 10000,    -- quanto tempo "o jogador esta brigando" dura apos um golpe
+    CROWD_RADIUS = 5,
+    LEASH = 8,                  -- seguidor nao se afasta mais que isso do jogador por um zumbi
+    OUTNUMBERED = { cauteloso = 4, defensivo = 5 }, -- zumbis em volta para recuar
+    SCARED_RADIUS = 6,          -- medroso foge de ameacas a essa distancia
+    SPAWN_SETTLE_MS = 3000,     -- corpo recem-criado pode ficar sem quadrado por esse tempo
+})
 
--- ---------------------------------------------------------------- postura
-function Rem.setGait(npc, gait)
-    local sneak = (gait == "sneak")
-    local run = (gait == "run")
-    if npc.sneaking ~= sneak then
-        npc.sneaking = sneak
-        npc.z:setVariable("RemSneak", sneak)
+-- ---------------------------------------------------------------- comportamentos
+-- Registro em Rem_Registry.lua (Rem.registerBehavior); os padrao em Rem_Behaviors.lua.
+-- Roda os comportamentos em ordem; retorna o nome do que tratou o tick (ou nil).
+-- Erro num comportamento e logado e o proximo e tentado.
+function Rem.runBehaviors(npc, ctx, now)
+    local list = Rem.behaviors
+    for i = 1, #list do
+        local b = list[i]
+        local ok, handled = pcall(b.run, npc, ctx, now)
+        if not ok then
+            Rem.log("ERRO no comportamento " .. tostring(b.name) .. ": " .. tostring(handled))
+        elseif handled then
+            return b.name
+        end
     end
-    if npc.running ~= run then
-        npc.running = run
-        npc.z:setVariable("RemRun", run)
-    end
-end
-
-local function baseGait(npc)
-    return npc.rec.stealth and "sneak" or "walk"
-end
-
-local function travelGait(npc, dist)
-    if npc.rec.stealth then return "sneak" end
-    if dist > RUN_DIST then return "run" end
-    return "walk"
-end
-
--- ---------------------------------------------------------------- movimento
--- Forca o PathFindState: zombie:pathToLocationF() cairia no WalkTowardState com caminho
--- livre, que manda zumbis useless direto para idle (sobrevivente parado).
-function Rem.moveTo(npc, x, y, z, now, gait)
-    Rem.setGait(npc, gait or baseGait(npc))
-    if now < npc.nextPath and npc.lastPathX and math.abs(npc.lastPathX - x) < 1 and math.abs(npc.lastPathY - y) < 1 then
-        return
-    end
-    npc.nextPath = now + REPATH_MS
-    npc.lastPathX, npc.lastPathY = x, y
-    npc.z:getPathFindBehavior2():pathToLocationF(x, y, z)
-    npc.z:setVariable("bPathfind", true)
-    npc.moving = true
-end
-
-function Rem.stopMoving(npc)
-    if npc.moving then
-        Rem.safe(function()
-            npc.z:getPathFindBehavior2():cancel()
-            npc.z:setVariable("bPathfind", false)
-        end)
-        npc.moving = false
-        npc.lastPathX, npc.lastPathY = nil, nil
-    end
-    if npc.running then Rem.setGait(npc, baseGait(npc)) end
-end
-
-function Rem.isMoving(npc)
-    if npc.moving and not npc.z:getVariableBoolean("bPathfind") then
-        npc.moving = false
-        npc.lastPathX, npc.lastPathY = nil, nil
-    end
-    return npc.moving
+    return nil
 end
 
 -- ---------------------------------------------------------------- inimigos
+-- Linha de visao: erro na checagem = NAO ve (falha fechada). Ver Rem_Awareness.
 local function canSee(npc, obj)
-    local ok, sees = pcall(function() return npc.z:CanSee(obj) end)
-    return not ok or sees ~= false
+    return Rem.Awareness.lineOfSight(npc, obj)
 end
 
--- Retorna o inimigo mais perto (zumbi, sobrevivente rival ou jogador) e a distancia.
-function Rem.findEnemy(npc)
+-- O jogador comecou uma briga ha pouco? (golpeou um zumbi)
+function Rem.playerFighting(now)
+    return Rem.playerFightAt ~= nil and (now - Rem.playerFightAt) < B.CFG.PLAYER_FIGHT_MS
+end
+
+-- Este zumbi e uma ameaca que justifica lutar? (ver cabecalho)
+function Rem.isThreat(npc, zombie, d, player, assist)
+    if d <= B.CFG.CLOSE_THREAT then return true end
+    if d <= B.CFG.THREAT_RADIUS and (Rem.isAware(zombie, npc) or zombie:getTarget() == npc.z) then return true end
+    if player and Rem.isFriendly(npc) then
+        local pd = Rem.dist(zombie, player)
+        if pd <= B.CFG.GUARD_RADIUS and zombie:getTarget() == player then return true end
+        if assist and pd <= B.CFG.ASSIST_RADIUS then return true end
+    end
+    return false
+end
+
+-- Retorna o inimigo mais perto (zumbi que ameaca, sobrevivente rival ou jogador) e a
+-- distancia. Conta tambem quantos zumbis estao em volta (npc.crowd).
+function Rem.findEnemy(npc, now)
+    now = now or Rem.nowMs()
     local z = npc.z
     local zFloor = math.floor(z:getZ())
-    local best, bestD = nil, SCAN_RADIUS
+    local best, bestD = nil, B.CFG.SCAN_RADIUS
+    local aggressive = Rem.temperOf(npc) == "agressivo"
+    local player = getPlayer()
+    if player and player:isDead() then player = nil end
+    local assist = player ~= nil and Rem.isFriendly(npc) and Rem.playerFighting(now)
+    local crowd = 0
 
     local list = getCell():getZombieList()
     for i = 0, list:size() - 1 do
         local other = list:get(i)
         if other ~= z and not other:isDead() and math.floor(other:getZ()) == zFloor then
             local d = Rem.dist(z, other)
+            local otherNpc = Rem.active[other]
+            if not otherNpc and d <= B.CFG.CROWD_RADIUS then crowd = crowd + 1 end
             if d < bestD then
-                local otherNpc = Rem.active[other]
                 if not otherNpc then
-                    best, bestD = other, d
-                elseif Rem.npcsHostile(npc, otherNpc) and (d < 2 or (d < HOSTILE_SIGHT and canSee(npc, other))) then
+                    if aggressive or Rem.isThreat(npc, other, d, player, assist) then
+                        best, bestD = other, d
+                    end
+                elseif Rem.npcsHostile(npc, otherNpc) and Rem.Awareness.sees(npc, other, d) then
                     best, bestD = other, d
                 end
             end
@@ -129,20 +141,18 @@ function Rem.findEnemy(npc)
         npc.lastAttacker = nil
     end
 
-    if Rem.isHostileToPlayer(npc) then
-        local player = getPlayer()
-        if player and not player:isDead() and math.floor(player:getZ()) == zFloor then
+    npc.crowd = crowd
+    -- jogador: so e inimigo se o hostil te percebeu de verdade (Rem_Awareness: visao com
+    -- luz/postura/campo de visao, memoria curta, procura, desistencia, coleira) e se nao
+    -- houver tregua (assalto resolvido, rendicao; Rem_Mugging)
+    if player and math.floor(player:getZ()) == zFloor and Rem.isHostileToPlayer(npc)
+        and not (Rem.Mugging and Rem.Mugging.ignoresPlayer(npc, now)) then
+        if Rem.Awareness.trackPlayer(npc, player, now) then
             local d = Rem.dist(z, player)
-            local range = HOSTILE_SIGHT
-            if player:isSneaking() then range = range * 0.5 end
-            if d < bestD and (d < 2 or (d < range and canSee(npc, player))) then
-                best, bestD = player, d
-                if not npc.sawPlayer then
-                    npc.sawPlayer = true
-                    Rem.bark(npc, "threat", true)
-                end
-            end
+            if not best or d < bestD then best, bestD = player, d end
         end
+    elseif npc.awareP and npc.awareP.state ~= "none" then
+        Rem.Awareness.giveUp(npc, now, true)   -- deixou de ser hostil (tregua, reputacao)
     end
     return best, bestD
 end
@@ -154,86 +164,48 @@ function Rem.reach(npc)
     return math.max(0.9, r) + 0.15
 end
 
--- ---------------------------------------------------------------- destino da rotina
--- Para pessoas de grupo: onde deveriam estar agora, segundo a simulacao do grupo.
-local function groupGoal(npc)
-    local g = npc.rec.groupId and Rem.getStore().groups[npc.rec.groupId]
-    if not g then return nil end
-    if g.activity == "scavenge" and g.target then
-        return g.target.x, g.target.y, g.target.z or 0, "scavenge"
-    end
-    if g.home then
-        return g.home.x, g.home.y, g.home.z or 0, (g.activity == "return") and "return" or "home"
-    end
-    return nil
-end
-
--- ---------------------------------------------------------------- comportamentos
-local function flee(npc, enemy, now)
-    local z = npc.z
-    local dx, dy = z:getX() - enemy:getX(), z:getY() - enemy:getY()
-    local len = math.max(0.01, math.sqrt(dx * dx + dy * dy))
-    local tx = z:getX() + dx / len * FLEE_DIST
-    local ty = z:getY() + dy / len * FLEE_DIST
-    if npc.rec.mode == "follow" then
-        local player = getPlayer()
-        if player and Rem.dist(player, enemy) > Rem.dist(z, enemy) then
-            tx, ty = player:getX(), player:getY()
-        end
-    end
-    Rem.bark(npc, "flee")
-    Rem.moveTo(npc, tx, ty, z:getZ(), now, "run")
-end
-
-local function idle(npc, now)
-    local z = npc.z
-    if now >= (npc.nextLook or 0) then
-        npc.nextLook = now + ZombRand(5000, 12000)
-        Rem.safe(function()
-            z:faceLocationF(z:getX() + ZombRandFloat(-5, 5), z:getY() + ZombRandFloat(-5, 5))
-        end)
-        if ZombRand(6) == 0 then Rem.bark(npc, "idle") end
-    end
-end
-
--- Fica num lugar: vai ate la; chegando, passeia em volta de vez em quando.
-local function hangAround(npc, x, y, z, now, radius)
-    local d = Rem.distXY(npc.z, x, y)
-    if d > (radius + ARRIVE_DIST) then
-        Rem.moveTo(npc, x, y, z, now, travelGait(npc, d))
-        return
-    end
-    if not Rem.isMoving(npc) then
-        Rem.setGait(npc, baseGait(npc))
-        idle(npc, now)
-        if ZombRand(30) == 0 then
-            local tx = x + ZombRand(-radius, radius + 1)
-            local ty = y + ZombRand(-radius, radius + 1)
-            local sq = getCell():getGridSquare(tx, ty, z)
-            if sq and sq:isFree(false) then
-                Rem.moveTo(npc, tx + 0.5, ty + 0.5, z, now, baseGait(npc))
-            end
-        end
-    end
-end
-
 function Rem.think(npc, now)
     local z = npc.z
     if not z:isUseless() then z:setUseless(true) end
     if z:getTarget() then z:setTarget(nil) end
     Rem.syncRecord(npc)
 
-    -- 0. levando golpe ou atacando
-    if now < npc.hitUntil or now < npc.attackUntil then return end
+    -- 0a. no chao, levantando, cambaleando: nao faz nada (nem ataca)
+    if not Rem.canAct(npc) then
+        Rem.cancelAttack(npc)
+        npc.downSince = npc.downSince or now
+        return
+    end
+    npc.downSince = nil
+
+    -- 0. levando golpe, atacando ou atirando
+    if now < npc.hitUntil or now < npc.attackUntil or now < (npc.shootUntil or 0) then return end
 
     local rec = npc.rec
-    local enemy, d = Rem.findEnemy(npc)
+    local enemy, d = Rem.findEnemy(npc, now)
+    local temper = Rem.temperOf(npc)
+    local player = getPlayer()
+    local isZombie = enemy ~= nil and not Rem.active[enemy] and not Rem.isPlayerObj(enemy)
 
-    -- 1. fugir com pouca vida
+    -- seguidor nao larga o jogador para correr atras de zumbi longe dele
+    if enemy and isZombie and rec.mode == "follow" and player and d > Rem.reach(npc)
+        and Rem.dist(enemy, player) > B.CFG.LEASH then
+        enemy, d = nil, nil
+    end
+
+    -- 0b. saqueador exigindo / grupo fugindo / rendicao (Rem_Mugging): decide antes da
+    --     fuga generica (senao um ferido nunca se renderia)
+    if enemy and Rem.Mugging and Rem.isPlayerObj(enemy) and Rem.Mugging.handle(npc, enemy, d, now) then return end
+
+    -- 1. fugir: pouca vida, em desvantagem, ou medo
     local fleeAt = Rem.cfg("FleeHealthPercent", 30) / 100
-    if enemy and Rem.healthFraction(npc) < fleeAt then
+    local limit = B.CFG.OUTNUMBERED[temper]
+    local outnumbered = limit ~= nil and (npc.crowd or 0) >= limit
+        and not (temper == "defensivo" and Rem.playerFighting(now))
+    local scared = temper == "medroso" and d ~= nil and d <= B.CFG.SCARED_RADIUS
+    if enemy and (Rem.healthFraction(npc) < fleeAt or outnumbered or scared) then
         npc.fleeing = true
-    elseif npc.fleeing and (not enemy or d > SAFE_DIST) then
+    elseif npc.fleeing and (not enemy or d > B.CFG.SAFE_DIST) then
         npc.fleeing = false
     end
     if npc.fleeing and enemy then
@@ -242,27 +214,30 @@ function Rem.think(npc, now)
             z:faceThisObject(enemy)
             if now >= npc.nextAttack then Rem.startAttack(npc, enemy, now) end
         else
-            flee(npc, enemy, now)
+            Rem.flee(npc, enemy, now)
         end
         return
     end
 
     if enemy then
+        -- 2b. atirador com municao: atira de longe (Rem_Ranged)
+        if Rem.tryRanged and Rem.tryRanged(npc, enemy, d, now) then return end
         -- 2. ao alcance: ataca
         if d <= Rem.reach(npc) then
             Rem.stopMoving(npc)
-            Rem.setGait(npc, baseGait(npc))
+            Rem.setGait(npc, Rem.baseGait(npc))
             z:faceThisObject(enemy)
             if now >= npc.nextAttack then Rem.startAttack(npc, enemy, now) end
             return
         end
         -- 3. vale a pena ir ate ele?
-        local isZombie = not Rem.active[enemy] and not Rem.isPlayerObj(enemy)
-        local engage = ENGAGE_RADIUS
-        if not isZombie then
-            engage = HOSTILE_SIGHT -- pessoas hostis: vai atras
+        local engage = B.CFG.ENGAGE_RADIUS
+        if Rem.isPlayerObj(enemy) then
+            engage = Rem.Awareness.CFG.CHASE_MAX -- perseguindo voce (Rem_Awareness ja decide quando desistir)
+        elseif not isZombie then
+            engage = B.CFG.HOSTILE_SIGHT -- pessoas hostis: vai atras
         elseif rec.stealth and not Rem.isAware(enemy, npc) then
-            engage = STEALTH_ENGAGE
+            engage = B.CFG.STEALTH_ENGAGE
         end
         if d <= engage then
             if isZombie then Rem.bark(npc, "spot") end
@@ -272,56 +247,29 @@ function Rem.think(npc, now)
         end
     end
 
-    -- 4a. ordens do jogador
-    if rec.mode == "follow" then
-        local player = getPlayer()
-        if player and not player:isDead() then
-            local pd = Rem.dist(z, player)
-            local playerSneak = player:isSneaking()
-            if pd > FOLLOW_DIST then
-                local gait = travelGait(npc, pd)
-                if playerSneak and gait ~= "run" then gait = "sneak" end
-                Rem.moveTo(npc, player:getX(), player:getY(), player:getZ(), now, gait)
-            else
-                Rem.stopMoving(npc)
-                Rem.setGait(npc, (playerSneak or rec.stealth) and "sneak" or "walk")
-                idle(npc, now)
-            end
-            return
-        end
-    end
-
-    if rec.mode == "stay" then
-        hangAround(npc, rec.homeX + 0.5, rec.homeY + 0.5, rec.homeZ, now, 0)
-        return
-    end
-
-    -- 4b. rotina do grupo
-    if rec.mode == "group" then
-        local gx, gy, gz = groupGoal(npc)
-        if gx then
-            hangAround(npc, gx + 0.5, gy + 0.5, gz, now, WANDER_RADIUS)
-            return
-        end
-    end
-
-    -- 5. wander perto de "casa"
-    hangAround(npc, rec.homeX + 0.5, rec.homeY + 0.5, rec.homeZ, now, WANDER_RADIUS)
+    -- 4. ordens do jogador, rotina do grupo, passeio... (comportamentos registrados)
+    local ctx = { enemy = enemy, dist = d, temper = temper, player = player }
+    Rem.runBehaviors(npc, ctx, now)
 end
 
 local function footsteps(npc, now)
     if npc.running and Rem.isMoving(npc) and now >= (npc.nextNoise or 0) then
-        npc.nextNoise = now + RUN_NOISE_MS
-        Rem.makeNoise(npc, RUN_NOISE_RADIUS)
+        npc.nextNoise = now + B.CFG.RUN_NOISE_MS
+        Rem.makeNoise(npc, B.CFG.RUN_NOISE_RADIUS)
     end
 end
 
 -- ---------------------------------------------------------------- loop principal
-local function isValid(zombie, npc)
-    if zombie:isDead() or not zombie:isExistInTheWorld() or zombie:getCurrentSquare() == nil then
+-- true = ok; "wait" = acabou de nascer e ainda nao esta num quadrado; false = sumiu.
+-- Nos primeiros frames apos addZombiesInOutfit o corpo pode estar sem quadrado; antes
+-- isso era lido como "chunk descarregou" e o corpo era re-ativado (aparencia/arma de novo).
+local function isValid(zombie, npc, now)
+    if zombie:isDead() or zombie:getPersistentOutfitID() ~= npc.rec.pid then return false end
+    if not zombie:isExistInTheWorld() or zombie:getCurrentSquare() == nil then
+        if now - (npc.activatedAt or 0) < B.CFG.SPAWN_SETTLE_MS then return "wait" end
         return false
     end
-    return zombie:getPersistentOutfitID() == npc.rec.pid
+    return true
 end
 
 local function onTick()
@@ -331,14 +279,15 @@ local function onTick()
     if Rem.activeCount == 0 then return end
     local gone = nil
     for zombie, npc in pairs(Rem.active) do
-        if not isValid(zombie, npc) then
+        local valid = isValid(zombie, npc, now)
+        if not valid then
             gone = gone or {}
             table.insert(gone, zombie)
-        else
+        elseif valid == true then
             Rem.updateAttack(npc, now)
             Rem.updateHitReact(npc, now)
             if now >= npc.nextThink then
-                npc.nextThink = now + THINK_MS
+                npc.nextThink = now + B.CFG.THINK_MS
                 Rem.safe(Rem.think, npc, now)
                 Rem.safe(Rem.perceive, npc, now)
                 Rem.safe(footsteps, npc, now)

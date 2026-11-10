@@ -32,6 +32,14 @@ node $A/$st/RemRunBat.xml       RemRunBat_$st       Bob_RunBat        55 1.0 $NP
 node $A/$st/RemSneak1H.xml      RemSneak1H_$st      Bob_WalkSneak     55 1.0 $NPC RemWeapon:STRING:1h  RemSneak:BOOL:true
 node $A/$st/RemSneakBat.xml     RemSneakBat_$st     Bob_WalkSneak_Bat 55 1.0 $NPC RemWeapon:STRING:bat RemSneak:BOOL:true
 done
+# ---- atirador: mirando e atirando, parado (RemGun = handgun | rifle)
+node $A/idle/RemAimHandgun.xml   RemAimHandgun   Bob_IdleAimHandgun 58 1.0 $NPC RemGun:STRING:handgun RemAim:BOOL:true
+node $A/idle/RemAimRifle.xml     RemAimRifle     Bob_IdleAimRifle   58 1.0 $NPC RemGun:STRING:rifle   RemAim:BOOL:true
+node $A/idle/RemShootHandgun.xml RemShootHandgun Bob_AttackHandgun  62 1.0 $NPC RemGun:STRING:handgun RemShoot:BOOL:true
+node $A/idle/RemShootRifle.xml   RemShootRifle   Bob_AttackRifle    62 1.0 $NPC RemGun:STRING:rifle   RemShoot:BOOL:true
+# ---- descanso, parado (RemRest = sit | sleep): sentado no chao / deitado dormindo
+node $A/idle/RemSit.xml          RemSit          Bob_SitGround_ActionIdle 57 1.0 $NPC RemRest:STRING:sit
+node $A/idle/RemSleep.xml        RemSleep        Bob_Asleep               57 1.0 $NPC RemRest:STRING:sleep
 # ---- sobrevivente levando golpe (acima de tudo)
 for st in idle pathfind walktoward; do
 node $A/$st/RemHitReact.xml RemHitReact_$st Bob_HitReact_01 65 1.0 $NPC RemHit:BOOL:true
