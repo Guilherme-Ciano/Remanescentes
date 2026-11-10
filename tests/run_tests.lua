@@ -40,6 +40,7 @@ require "Remanescentes/Rem_Infection"
 require "Remanescentes/Rem_Regions"
 require "Remanescentes/Rem_Evolution"
 require "Remanescentes/Rem_Relations"
+require "Remanescentes/Rem_Interact"
 
 -- ------------------------------------------------------------------ roda os testes
 local files = {}

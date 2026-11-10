@@ -95,7 +95,7 @@ function Rem.changeRep(key, delta, reason)
     local old = Rem.getRep(key)
     local new = math.max(R.CFG.MIN, math.min(R.CFG.MAX, old + delta))
     repTable()[key] = new
-    Rem.debug(string.format("reputacao %s: %d -> %d (%s)", key, old, new, tostring(reason)))
+    Rem.debug(string.format("reputacao %s: %d -> %d (%s)", key, math.floor(old), math.floor(new), tostring(reason)))
     Rem.emit("reputationChanged", key, old, new, reason)
     R.refreshKey(key)
     return new
@@ -246,7 +246,7 @@ function R.checkTerritory(player, now)
     for gid, g in pairs(Rem.getStore().groups) do
         local st = R.state[gid] or {}
         R.state[gid] = st
-        if R.TERRITORIAL[g.faction] then
+        if R.TERRITORIAL[g.faction] and not (Rem.Interact and Rem.Interact.isGuest(g)) then
             local inside = insideBase(g, px, py)
             local guard = inside and nearestMemberOnScene(g, player)
             local anyRec = nil

@@ -207,9 +207,10 @@ local ok, err, ctx = T.openMenu(910, 910)
 check(ok, "menu com opcoes registradas abre sem erro " .. tostring(err or ""))
 local root = T.findOpt(ctx, "ContextMenu_Rem_Title")
 local dbg = T.findOpt(root.sub, "ContextMenu_Rem_Debug").sub
-local last = dbg.options[#dbg.options]
-check(last.name == "ContextMenu_Teste_Debug" and dbg.options[1].name == "ContextMenu_Rem_SpawnAlly",
-    "opcao de debug registrada aparece depois das padrao")
+local flat = T.flattenDebug(dbg)
+local last = flat[#flat]
+check(last.name == "ContextMenu_Teste_Debug" and last.groupName == "ContextMenu_Rem_Grp_other" and flat[1].name == "ContextMenu_Rem_SpawnAlly",
+    "opcao de debug registrada aparece depois das padrao (grupo Outros)")
 last.fn(last.target, unpack(last.args))
 check(clicked and clicked[1] == 910.5 and clicked[2] == 910.5 and clicked[3] == 0 and clicked[4] == player,
     "clique chama fn(x, y, z, player)")

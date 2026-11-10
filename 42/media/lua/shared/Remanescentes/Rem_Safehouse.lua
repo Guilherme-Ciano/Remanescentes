@@ -499,6 +499,7 @@ end
 
 -- A porta fica trancada para voce, a menos que o grupo seja amigavel com voce.
 function S.locksOut(g)
+    if Rem.Interact and Rem.Interact.isGuest(g) then return false end   -- voce e hospede (Fase E3)
     if not Rem.attitudeOf then return true end
     for _, id in ipairs(g.members) do
         local p = Rem.getPerson(id)

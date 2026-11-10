@@ -66,7 +66,7 @@ function EV.fall(g)
         store.nests[h.bid] = { x1 = h.x1, y1 = h.y1, x2 = h.x2, y2 = h.y2, x = h.x, y = h.y,
             count = ZombRand(CFG.NEST_ZOMBIES[1], CFG.NEST_ZOMBIES[2] + 1) }
     end
-    Rem.log("a base do grupo " .. g.id .. " (" .. g.faction .. ") caiu para os zumbis")
+    Rem.debug("a base do grupo " .. g.id .. " (" .. g.faction .. ") caiu para os zumbis")
     removeGroup(g)
 end
 
@@ -109,7 +109,7 @@ function EV.recruit(g, e)
         if Rem.Reputation and Rem.Reputation.apply then Rem.Reputation.apply(p) end
     end
     e.members = {}
-    Rem.log("grupo " .. g.id .. " recrutou " .. #list .. " errante(s) do grupo " .. e.id)
+    Rem.debug("grupo " .. g.id .. " recrutou " .. #list .. " errante(s) do grupo " .. e.id)
     removeGroup(e)
     return #list
 end

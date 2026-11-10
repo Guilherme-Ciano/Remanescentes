@@ -137,9 +137,15 @@ function MG.handle(npc, player, d, now)
             Rem.bark(leader, "angry", true)
             return false
         end
-        -- cerca, sem atacar
+        -- cerca a 3-5 tiles, sem atacar
         if d > CFG.DEMAND_FAR then
             Rem.moveTo(npc, player:getX(), player:getY(), player:getZ(), now, "walk")
+        elseif d < CFG.DEMAND_NEAR then
+            -- voce chegou perto demais: ele recua um passo e mantem a distancia
+            local dx, dy = npc.z:getX() - player:getX(), npc.z:getY() - player:getY()
+            local len = math.max(0.01, math.sqrt(dx * dx + dy * dy))
+            Rem.moveTo(npc, npc.z:getX() + dx / len * 1.5, npc.z:getY() + dy / len * 1.5, npc.z:getZ(), now, "walk")
+            npc.z:faceThisObject(player)
         else
             Rem.stopMoving(npc)
             npc.z:faceThisObject(player)

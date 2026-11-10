@@ -37,7 +37,9 @@ function Rem.updateScene(player, now)
     -- tira corpo de quem ficou longe (seguidores nunca)
     local far = nil
     for _, npc in pairs(Rem.active) do
-        if npc.rec.mode ~= "follow" and Rem.dist2(px, py, npc.z:getX(), npc.z:getY()) > S.CFG.DESPAWN_RADIUS then
+        local mode = npc.rec.mode
+        -- seguidores (inclusive saqueando para voce) nunca saem de cena
+        if mode ~= "follow" and mode ~= "loot" and Rem.dist2(px, py, npc.z:getX(), npc.z:getY()) > S.CFG.DESPAWN_RADIUS then
             far = far or {}
             table.insert(far, npc)
         end

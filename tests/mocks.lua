@@ -117,7 +117,21 @@ function T.newWeapon(id)
         getMaxRange = function() return s[3] end, getSoundRadius = function() return 15 end,
         getSwingSound = function() return "Swing" end, getZombieHitSound = function() return "Hit" end }
 end
-function instanceItem(id) return T.newWeapon(id) end
+T.WEAPONS = { ["Base.BaseballBat"] = true, ["Base.HuntingKnife"] = true, ["Base.KitchenKnife"] = true, ["Base.Axe"] = true,
+    ["Base.Crowbar"] = true, ["Base.LeadPipe"] = true, ["Base.Shovel"] = true, ["Base.Machete"] = true, ["Base.Hammer"] = true,
+    ["Base.Wrench"] = true, ["Base.Pipe"] = true, ["Base.Pistol"] = true, ["Base.Shotgun"] = true, ["Base.HuntingRifle"] = true }
+function instanceItem(id)
+    if T.WEAPONS[id] or not T.newItem then
+        local w = T.newWeapon(id)
+        function w:getFullType() return id end
+        function w:getDisplayName() return id end
+        function w:getDisplayCategory() return "Weapon" end
+        function w:isFood() return false end
+        function w:getActualWeight() return 2 end
+        return w
+    end
+    return T.newItem(id)
+end
 
 local function vec(x, y) return { getX = function() return x end, getY = function() return y end } end
 
@@ -217,9 +231,22 @@ function player:isSprinting() return false end
 function player:isPlayerMoving() return self.moving ~= false end
 function player:getPrimaryHandItem() return self.weapon end
 function player:getClothingItem_Back() return self.bag end
+player.inv = { items = {} }
+function player.inv:getItems() return T.JList(self.items) end
+function player.inv:AddItem(x)
+    local it = (type(x) == "string") and T.newItem(x) or x
+    table.insert(self.items, it)
+    return it
+end
+function player.inv:DoRemoveItem(it)
+    for i, x in ipairs(self.items) do if x == it then table.remove(self.items, i) return end end
+end
+function player:getInventory() return self.inv end
+function player:isEquipped(it) return it == self.weapon end
 function player:getBodyPartClothingDefense(i, bite, bullet) return self.defense or 0 end
 function player:Say(s) table.insert(self.said, s) end
 function player:playSound() end
+function player:playSoundLocal(n) T.localSounds = T.localSounds or {} table.insert(T.localSounds, n) end
 function player:splatBloodFloor() end
 function player:setAttackedBy(a) self.attackedBy = a end
 function player:teleportTo(x, y, z) self.x, self.y, self.z = x, y, z end
@@ -328,8 +355,16 @@ function T.newItem(id)
     local it = { id = id }
     function it:getFullType() return self.id end
     function it:isFood() return T.FOOD[self.id] == true end
-    function it:getDisplayCategory() return T.FOOD[self.id] and "Food" or (self.id:find("Bandage") and "FirstAid" or "Junk") end
+    function it:getDisplayCategory()
+        if T.FOOD[self.id] then return "Food" end
+        if self.id:find("Bandage") or self.id:find("Disinfectant") or self.id:find("Pills") then return "FirstAid" end
+        if self.id:find("Bullets") or self.id:find("Shells") then return "Ammo" end
+        return "Junk"
+    end
     function it:getActualWeight() return self.id:find("Sofa") and 50 or 1 end
+    function it:getDisplayName() return self.id end
+    function it:isEquipped() return false end
+    function it:isFavorite() return false end
     return it
 end
 
@@ -401,7 +436,11 @@ function T.addObject(x, y, z, kind, opts)
     if kind == "container" then
         local c = { _class = "ItemContainer", ctype = opts.type or "counter", items = {}, explored = opts.explored == true }
         function c:getType() return self.ctype end
-        function c:AddItem(id) local it = T.newItem(id) table.insert(self.items, it) return it end
+        function c:AddItem(x)   -- como no jogo: aceita o tipo ("Base.X") ou o proprio item
+            local it = (type(x) == "table") and x or T.newItem(x)
+            table.insert(self.items, it)
+            return it
+        end
         function c:getItems() return T.JList(self.items) end
         function c:setExplored(b) self.explored = b end
         function c:isExplored() return self.explored end
@@ -447,5 +486,18 @@ function T.saidPrefix(z, prefix)
     return false
 end
 function T.count(t) local n = 0 for _ in pairs(t) do n = n + 1 end return n end
+
+-- Ferramentas de teste agrupadas em sub-submenus: lista plana das opcoes (na ordem).
+function T.flattenDebug(dbg)
+    local out = {}
+    for _, g in ipairs(dbg.options) do
+        if g.sub then
+            for _, o in ipairs(g.sub.options) do o.groupName = g.name table.insert(out, o) end
+        else
+            table.insert(out, g)
+        end
+    end
+    return out
+end
 
 return T

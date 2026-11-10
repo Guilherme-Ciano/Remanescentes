@@ -227,7 +227,7 @@ end
 function Rem.profileText(rec)
     local prof = rec.professionUI and getText(rec.professionUI) or "?"
     local arch = getText("IGUI_Rem_Arch_" .. tostring(rec.archetype or "brigao"))
-    return string.format("%s, %d, %s (%s)", rec.name or "?", rec.age or 0, prof, arch)
+    return string.format("%s, %d, %s (%s)", rec.name or "?", math.floor(rec.age or 0), prof, arch)
 end
 
 -- ---------------------------------------------------------------- ganchos

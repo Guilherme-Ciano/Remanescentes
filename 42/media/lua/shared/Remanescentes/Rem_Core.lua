@@ -23,7 +23,7 @@ local Rem = Remanescentes
 require "Remanescentes/Rem_Events"
 require "Remanescentes/Rem_Registry"
 
-Rem.VERSION = "0.7.0"
+Rem.VERSION = "0.9.0"
 Rem.MODDATA_KEY = "Remanescentes"
 
 -- Pessoas com corpo agora: [IsoZombie] = npc (estado de runtime, nao salvo)

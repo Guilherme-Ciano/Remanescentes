@@ -22,6 +22,7 @@ require "Remanescentes/Rem_Perception"
 require "Remanescentes/Rem_Combat"
 require "Remanescentes/Rem_Movement"
 require "Remanescentes/Rem_Brain"
+require "Remanescentes/Rem_Spatial"
 local Rem = Remanescentes
 
 local RG = Rem.module("Ranged", {
@@ -174,11 +175,9 @@ end
 
 function RG.zombiesAround(npc, r)
     local n = 0
-    local list = getCell():getZombieList()
-    local x, y = npc.z:getX(), npc.z:getY()
-    for i = 0, list:size() - 1 do
-        local zb = list:get(i)
-        if not Rem.active[zb] and not zb:isDead() and Rem.dist2(x, y, zb:getX(), zb:getY()) <= r then n = n + 1 end
+    local list = Rem.zombiesNear(npc.z:getX(), npc.z:getY(), r)
+    for i = 1, #list do
+        if not Rem.active[list[i]] then n = n + 1 end
     end
     return n
 end

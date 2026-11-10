@@ -42,7 +42,8 @@ local hasAllyEntry = false
 for _, o in ipairs(root2.sub.options) do if o.sub and T.findOpt(o.sub, "ContextMenu_Rem_Follow") then hasAllyEntry = true end end
 check(hasAllyEntry, "aliado perto aparece no menu com ordens")
 local dbg = T.findOpt(root2.sub, "ContextMenu_Rem_Debug").sub
-for _, o in ipairs(dbg.options) do
+check(dbg.options[1].name == "ContextMenu_Rem_Grp_spawn" and dbg.options[1].sub ~= nil, "ferramentas agrupadas em submenus (Criar primeiro)")
+for _, o in ipairs(T.flattenDebug(dbg)) do
     if o.name == "ContextMenu_Rem_NearestGroup" or o.name == "ContextMenu_Rem_ListGroups" then
         local okc, errc = pcall(o.fn, o.target, unpack(o.args))
         check(okc, o.name .. " roda sem erro " .. tostring(errc or ""))

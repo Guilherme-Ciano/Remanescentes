@@ -110,13 +110,16 @@ Rem.emit("sceneUpdate", player, T.clock)
 local b1 = 0
 for _, w in ipairs(wins) do if w.barricade then b1 = b1 + 1 end end
 check(b1 > b0 or b0 == #wins, "voce volta e a casa esta mais barricada (" .. b0 .. " -> " .. b1 .. ")")
--- cair para uma horda
+-- cair para uma horda (grupo fora de cena: a evolucao diaria nao mexe em quem voce esta vendo)
 player.x, player.y = 25000, 25000
+T.tick(1600)
+for _, id in ipairs(gF.members) do local p = Rem.getPerson(id) if p then p.onScene = false end end
 EV.CFG.FALL_PERMILLE = 1000
 local ids = {}
 for _, id in ipairs(gF.members) do table.insert(ids, id) end
 local gid = gF.id
 gF.home.fortifyLevel = 0
+gF.supplies = 0   -- sem comida sobrando nao fortifica hoje: a chance de cair fica em 100%
 EV.daily()
 check(Rem.getStore().groups[gid] == nil, "a base caiu: o grupo acabou")
 check(#Rem.getStore().turned >= #ids, "os moradores viraram zumbis")

@@ -257,7 +257,7 @@ function Rem.materialize(rec)
         rec.female and 100 or 0,
         false, false, false, false, false, false, rec.hp or rec.maxHealth or 3.0)
     if not list or list:size() == 0 then
-        Rem.log("falha ao materializar " .. tostring(rec.name))
+        Rem.debug("falha ao materializar " .. tostring(rec.name))
         return nil
     end
     local npc = Rem.activate(list:get(0), rec)
@@ -291,7 +291,7 @@ function Rem.spawn(x, y, z, opts)
         return nil
     end
     Rem.bark(npc, "hello", true)
-    Rem.log("criado " .. rec.name .. " (" .. rec.faction .. ", " .. rec.outfit .. ", " .. rec.item .. ") em " .. x .. "," .. y)
+    Rem.debug("criado " .. rec.name .. " (" .. rec.faction .. ", " .. rec.outfit .. ", " .. rec.item .. ") em " .. x .. "," .. y)
     return npc
 end
 
@@ -371,7 +371,7 @@ end)
 Events.OnZombieDead.Add(function(zombie)
     local npc = Rem.active[zombie]
     if not npc then return end
-    Rem.log((npc.rec.name or "?") .. " morreu")
+    Rem.debug((npc.rec.name or "?") .. " morreu")
     local player = getPlayer()
     if player and Rem.dist(player, zombie) < 30 and Rem.isFriendly(npc) then
         player:Say(getText("IGUI_Rem_Died", npc.rec.name or "?"))

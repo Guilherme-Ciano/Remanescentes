@@ -25,6 +25,7 @@ require "Remanescentes/Rem_Spawn"
 require "Remanescentes/Rem_Barks"
 require "Remanescentes/Rem_Movement"
 require "Remanescentes/Rem_Timeline"
+require "Remanescentes/Rem_Spatial"
 local Rem = Remanescentes
 
 local AM = Rem.module("Ambient", {
@@ -376,10 +377,9 @@ local function leave(npc, player)
 end
 
 local function zombieNear(npc, r)
-    local list = getCell():getZombieList()
-    for i = 0, list:size() - 1 do
-        local zb = list:get(i)
-        if not Rem.active[zb] and not zb:isDead() and Rem.dist(npc.z, zb) <= r then return true end
+    local list = Rem.zombiesNear(npc.z:getX(), npc.z:getY(), r)
+    for i = 1, #list do
+        if not Rem.active[list[i]] then return true end
     end
     return false
 end

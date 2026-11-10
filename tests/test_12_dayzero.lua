@@ -205,6 +205,7 @@ AM.trySpawn(player, T.clock, "gunshot")
 check(#T.worldSounds == 1 and Rem.dist2(T.worldSounds[1].x, T.worldSounds[1].y, player.x, player.y) >= 39, "tiro ao longe: som real longe de voce")
 
 realPrint("95) C4 Mordidos viram zumbis")
+SandboxVars.Remanescentes.AmbientDensity = 0   -- (passagem criaria zumbis extras e baguncaria as contagens)
 fresh()
 SandboxVars.Remanescentes.NPCInfectionChance = 100
 local victim = Rem.spawn(13700, 13700, 0, { faction = "civis", mode = "stay" })

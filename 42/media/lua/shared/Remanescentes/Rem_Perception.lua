@@ -16,6 +16,7 @@
 -- Modo simulado (ZombieAttackMode = 2): perseguicao + animacao de bote + dano em Lua.
 require "Remanescentes/Rem_Core"
 require "Remanescentes/Rem_Barks"
+require "Remanescentes/Rem_Spatial"
 local Rem = Remanescentes
 
 local P = Rem.module("Perception", {
@@ -244,9 +245,9 @@ function Rem.perceive(npc, now)
     if now < (npc.nextPerceive or 0) then return end
     npc.nextPerceive = now + P.CFG.PERCEIVE_MS
     local z = npc.z
-    local list = getCell():getZombieList()
-    for i = 0, list:size() - 1 do
-        local other = list:get(i)
+    local list = Rem.zombiesNear(z:getX(), z:getY(), P.CFG.SCAN_RADIUS)
+    for i = 1, #list do
+        local other = list[i]
         if other ~= z and not Rem.active[other] and not other:isDead()
             and math.floor(other:getZ()) == math.floor(z:getZ()) then
             local d = Rem.dist(z, other)

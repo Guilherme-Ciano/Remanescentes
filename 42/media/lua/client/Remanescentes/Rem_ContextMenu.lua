@@ -79,9 +79,24 @@ local function onFillWorldMenu(playerNum, context, worldobjects, test)
     local dbg = ISContextMenu:getNew(sub)
     sub:addSubMenu(dopt, dbg)
     local player = getPlayer()
+    -- agrupadas em sub-submenus (Criar, Mundo e grupos, Passagem, Reputacao, Outros)
+    local byGroup, order = {}, {}
+    for _, g in ipairs(Rem.DEBUG_GROUPS) do byGroup[g] = {} table.insert(order, g) end
     for _, o in ipairs(Rem.debugOptions) do
-        local fn = o.fn
-        dbg:addOption(getText(o.labelKey), nil, function() fn(x, y, z, player) end)
+        local g = Rem.debugGroupOf(o)
+        if not byGroup[g] then byGroup[g] = {} table.insert(order, g) end
+        table.insert(byGroup[g], o)
+    end
+    for _, g in ipairs(order) do
+        if #byGroup[g] > 0 then
+            local gopt = dbg:addOption(getText("ContextMenu_Rem_Grp_" .. g), nil, nil)
+            local gmenu = ISContextMenu:getNew(dbg)
+            dbg:addSubMenu(gopt, gmenu)
+            for _, o in ipairs(byGroup[g]) do
+                local fn = o.fn
+                gmenu:addOption(getText(o.labelKey), nil, function() fn(x, y, z, player) end)
+            end
+        end
     end
 end
 

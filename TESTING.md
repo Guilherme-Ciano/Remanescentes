@@ -1,4 +1,4 @@
-# Como testar o Remanescentes (0.7.0)
+# Como testar o Remanescentes (0.9.0)
 
 > **Casas barricadas do próprio jogo ≠ safehouses do mod.** O B42 já gera casas com tábuas **por fora** e cheias de zumbis (histórias aleatórias). As safehouses do mod têm tábuas **por dentro**, uma porta principal sem tábuas, moradores humanos e, quase sempre, placa, corpos empilhados e fogueira. Para achar uma: **Ferramentas de teste → "Info do grupo mais próximo"** e **"Teleportar perto do grupo mais próximo"**.
 >
@@ -8,17 +8,17 @@
 ```bash
 cd ~/Zomboid/mods/Remanescentes && lua5.1 tests/run_tests.lua
 ```
-Simulam a API do jogo e verificam spawn, movimento, combate (inclusive o ataque real dos zumbis e a troca de alvo), hostis, NPC × NPC, mundo vivo (semeadura, simulação, saque, casas vazias), materialização, save/load e migração da 0.2.
-Também verificam o contrato de extensão (eventos, comportamentos, facções, opções de menu). Novos testes: basta criar `tests/test_<tema>.lua`.
+Simulam a API do jogo (520+ verificações) e verificam spawn, movimento, combate (inclusive o ataque real dos zumbis e a troca de alvo), hostis, NPC × NPC, mundo vivo (semeadura, simulação, saque, casas vazias), materialização, save/load e migração da 0.2.
+Também verificam o contrato de extensão (eventos, comportamentos, facções, opções de menu). Novos testes: basta criar `tests/test_<tema>.lua`. Desempenho: `lua5.1 tests/bench/bench.lua 1500` (ms por quadro com 1500 zumbis).
 **Não** testam animações nem o motor real: isso só dentro do jogo.
 
 ## 2. Preparar o jogo
 1. Opções de inicialização da Steam: `-debug` (mantendo o `-javaagent` do ZombieBuddy, se usar).
 2. **Use um save NOVO de teste.** Saves da 0.2 funcionam (os sobreviventes são migrados como aliados), mas o primeiro teste deve ser limpo.
 3. Mods → ative **Remanescentes**.
-4. Sandbox → página **Remanescentes**: deixe o padrão. A opção "Ataque dos zumbis aos sobreviventes" começa em **Real (experimental)**.
+4. Sandbox → abas **Remanescentes: Sobreviventes / Mundo / Zumbis / Teste**: deixe o padrão, **exceto** na aba **Teste**: ligue **"Ferramentas de teste no clique direito"** (vem desligada desde a 0.9.0) e, se quiser ver o que acontece por trás, **"Log detalhado"**.
 
-Tudo de teste fica em: clique direito no chão → **Remanescentes → Ferramentas de teste**.
+Tudo de teste fica em: clique direito no chão → **Remanescentes → Ferramentas de teste**, dividido em submenus: **Criar**, **Mundo e grupos**, **Gente de passagem**, **Reputação** e **Outros**.
 
 ## 3. Roteiro: combate real (Fase 2)
 
@@ -160,6 +160,42 @@ Save novo, "Log detalhado" ligado (console: `regiao ...`, `troca:`, `caiu para o
 | W6 | "Relações do grupo mais próximo" | Console lista os vizinhos com a relação (saqueadores negativos, mesma facção positivos) |
 | W7 | Bater num membro de um grupo que tem aliado perto | A reputação com o aliado também cai (pela metade) |
 
+## 4j. Roteiro: interação (Fase E, 0.8.0)
+Ache um grupo de civis ("Teleportar perto do grupo mais próximo"). Clique direito num morador → **Conversar**.
+
+| # | Ação | Esperado |
+|---|---|---|
+| I1 | Abrir a conversa | Janela com nome, profissão, facção, atitude e reputação; cumprimento conforme a atitude; o NPC **para e olha para você** |
+| I2 | "Como vão as coisas?" com alguém do grupo ferido | Fala que precisa de remédio |
+| I3 | "Sabe de outros grupos?" (reputação baixa e depois alta; use "Reputação +25") | Primeiro desconfia; depois diz direção e distância de outro grupo |
+| I4 | "Quero trocar" | Janela de troca: à esquerda suas coisas, à direita o estoque deles com valores; marque itens e veja o saldo; troca injusta é recusada; troca justa move os itens (os seus vão para o armário deles) |
+| I5 | "Posso ficar com vocês?" com reputação alta | Aceitam; a porta principal fica destrancada para você |
+| I6 | "Quer vir comigo?" com alguém leal (Ficha) e reputação alta | Vira aliado e passa a te seguir |
+| I7 | Clique direito no aliado → **Guardar esta posição** / **Saquear o prédio aqui perto** | Fica de guarda no lugar / vai, abre armários e volta te entregando os itens |
+| I8 | "Precisam de ajuda?" | Recebe uma missão conforme a necessidade; "Sobre o que vocês pediram..." entrega/conclui e dá recompensa |
+| I9 | Missão "alguém sumiu" | Vá na direção dita, fale com ele ("Sua família tá te esperando") e ele volta para casa; depois conclua com o grupo |
+| I10 | "[Ameaçar]" com um machado na mão | Medroso entrega coisas; corajoso reage e o grupo ataca |
+| I11 | Depois de "Sabe de outros grupos?" (com resposta), abrir o mapa (M) | "Deixa eu marcar no seu mapa" + aviso "Local marcado"; no mapa: **círculo colorido** pela facção, símbolo e anotação com quem contou |
+| I12 | Pegar a missão "alguém sumiu" e abrir o mapa | Um **?** laranja onde a pessoa está, e a casa do grupo marcada |
+| I13 | Ganhar abrigo e abrir o mapa | A casa marcada como "Abrigo" |
+| I14 | Fechar e abrir o mapa / salvar e carregar | As marcações continuam, sem duplicar |
+
+## 4k. Roteiro: janelas e falas novas (Fase F, 0.9.0)
+Ache civis ou crie um ("Criar" → civil). Clique direito → **Conversar**.
+
+| # | Ação | Esperado |
+|---|---|---|
+| F1 | Abrir a conversa | Janela larga: à esquerda o **retrato 3D** do NPC com a roupa dele, nome, profissão e idade, arquétipo, a **facção na cor dela**, a atitude colorida e uma **barra de reputação**; à direita o histórico e as opções numeradas, "tchau" separado embaixo |
+| F2 | Clicar em algumas opções | O histórico mostra "Você:" em azul e a resposta na cor da facção; o NPC **também fala em voz alta** (texto sobre a cabeça) |
+| F3 | Repetir "Como vão as coisas?" e despedir-se algumas vezes | As respostas **variam**; um NPC medroso (Ficha: coragem baixa) fala assustado; um agressivo fala seco |
+| F4 | Afastar-se uns 7 tiles com a janela aberta | A janela **fecha sozinha** |
+| F5 | "Quero trocar" | Cada item com **ícone** e valor; em cima o que o grupo está precisando e a margem que cobram; embaixo totais e saldo. Itens marcados ficam verdes (seus) e laranja (deles) |
+| F6 | Marcar só coisas deles | Botão **Trocar desabilitado** (saldo negativo); marcando coisas suas suficientes, habilita |
+| F7 | Ficar perto de vários NPCs por alguns minutos (combate, ocioso) | Falas variadas, sem a **mesma frase duas vezes seguidas**; saqueadores falam como durões, civis medrosos falam assustados |
+| F8 | Novo jogo → Sandbox | 4 abas com títulos "Remanescentes: ...", textos com acento e explicação em cada opção |
+| F9 | Jogar perto de uma horda grande (100+ zumbis) com vários NPCs | Sem queda de FPS perceptível causada pelos NPCs |
+| F10 | Ativar junto com o seu modlist | Nenhum erro novo no console; o mapa (M) com Map Symbol Size Slider mostra as marcações na escala escolhida |
+
 ## 5. Se algo der errado
 ```bash
 grep -n "Remanescentes\|STACK TRACE" ~/Zomboid/console.txt | tail -60
@@ -170,12 +206,11 @@ grep -n "Remanescentes\|STACK TRACE" ~/Zomboid/console.txt | tail -60
 
 ## 6. Limitações conhecidas
 - **Só single player.**
-- Os sobreviventes podem **gemer como zumbi** (sons ainda não desligados).
 - Reações de **queda/levantar** ainda são de zumbi. A de levar golpe é humana.
 - Tiro de NPC não tem projétil visível nem flash; o acerto é calculado (chance pela distância).
-- Sem diálogo, troca, recrutamento e missões (Fase E do plano).
 - Gente de passagem que estava em cena num save e cujo tempo acabou pode voltar ao carregar como um zumbi comum com roupa limpa (o corpo fica no chunk).
 - Placas não têm texto desenhado no mundo (o jogo não suporta): o texto aparece sobre você ao chegar perto. A "fumaça" é uma fogueira acesa.
 - A pose de dormir usa a animação de dormir na cama do jogador, no chão.
-- Portas trancadas pelas safehouses ficam trancadas para você também (como no jogo: arrombe, quebre uma janela ou ganhe a confiança deles, na Fase 4).
+- O retrato 3D da conversa mostra a roupa e o corpo do NPC, mas não o mesmo rosto/cabelo do corpo no mundo.
+- Portas trancadas pelas safehouses ficam trancadas para você também (como no jogo: arrombe, quebre uma janela ou ganhe a confiança deles e peça abrigo).
 - A simulação fora de cena é abstrata: grupos "viajam" em linha reta pelo mapa.

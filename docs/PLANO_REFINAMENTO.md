@@ -85,11 +85,19 @@ Objetivo: a sensação dos primeiros dias do apocalipse.
 | D3 Bases que evoluem | Fortificam aos poucos, caem para hordas (viram ninho com o loot), crescem recrutando errantes, saqueadores tomam bases de famílias. |
 | D4 Relações entre grupos | Alianças, rixas, comércio entre grupos, notícias que correm (reputação regional). |
 
-### Fase E: Interação (Fase 4 do plano original)
+### Fase E: Interação (Fase 4 do plano original) ✅ 0.8.0 (falta validar no jogo)
 Conversar (menu de diálogo curto), trocar (valor pela necessidade do grupo), pedir abrigo, recrutar (Lealdade), comandos de seguidor (seguir, esperar, guardar posição, saquear aqui), missões simples, ameaçar e roubar.
 
-### Fase F: Polimento e lançamento
-Preset "Dia Zero" no sandbox, `DebugMenu` desligado por padrão, perfil de desempenho (custo por NPC por segundo), testes no jogo sistemáticos, compatibilidade com o seu modlist e a página da Workshop.
+### Fase F: Polimento e lançamento ✅ 0.9.0 (candidata a lançamento; falta validar no jogo)
+| Etapa | Feito |
+|---|---|
+| F1 Revisão do código | Revisão estática de todos os módulos: nada vaza para o global, código morto removido (`canSee` antigo), formatos `%d` sempre com inteiro, mensagens de rotina movidas para o log detalhado. |
+| F2 Desempenho | Índice espacial de zumbis (`Rem_Spatial.lua`, células de 8 tiles, refeito no máximo a cada 100 ms): busca de inimigos, percepção, tiro e eventos de rua deixaram de varrer todos os zumbis por NPC. Com 1500 zumbis e 12 NPCs: de 2,29 para 0,71 ms por quadro (`tests/bench/bench.lua`). |
+| F3 Sandbox | 27 opções em 4 abas: **Sobreviventes**, **Mundo**, **Zumbis** e **Teste**. Os padrões já são o perfil "Dia Zero" (saqueadores a partir do dia 4, colapso normal, gente na rua 100%). `DebugMenu` desligado por padrão. |
+| F4 Ferramentas de teste | Menu dividido em submenus (Criar, Mundo e grupos, Gente de passagem, Reputação, Outros). |
+| F5 Interação mais bonita e real | Janela de conversa com **retrato 3D** do NPC, ficha, facção colorida, barra de reputação e histórico da conversa; janela de troca com **ícones**, valores, o que o grupo precisa e o saldo; respostas e falas com **variações** e **tom pela personalidade** (medroso, durão), sem repetir a última fala. |
+| F6 Compatibilidade | Conferido com o modlist (ZombieBuddy, SmarterStorage, MapSymbolSizeSlider, EquipmentUI, EfficiencySkillMod2, DGVCurtains, HeliEvent, DGVWindows3D): nenhum substitui o que o mod usa. Os ganchos do mod encadeiam o original (mapa do mundo, pesca), e as marcações respeitam a escala do MapSymbolSizeSlider. |
+| F7 Pacote | README, CHANGELOG, roteiro de testes por sistema, pasta da Workshop (`workshop/`) com descrição e imagem. Envio só depois da validação no jogo. |
 
 ---
 

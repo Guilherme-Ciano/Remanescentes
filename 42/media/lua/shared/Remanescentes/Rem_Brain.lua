@@ -36,6 +36,7 @@ require "Remanescentes/Rem_Combat"
 require "Remanescentes/Rem_Movement"
 require "Remanescentes/Rem_Behaviors"
 require "Remanescentes/Rem_Awareness"
+require "Remanescentes/Rem_Spatial"
 local Rem = Remanescentes
 
 local B = Rem.module("Brain", {
@@ -78,10 +79,6 @@ function Rem.runBehaviors(npc, ctx, now)
 end
 
 -- ---------------------------------------------------------------- inimigos
--- Linha de visao: erro na checagem = NAO ve (falha fechada). Ver Rem_Awareness.
-local function canSee(npc, obj)
-    return Rem.Awareness.lineOfSight(npc, obj)
-end
 
 -- O jogador comecou uma briga ha pouco? (golpeou um zumbi)
 function Rem.playerFighting(now)
@@ -113,10 +110,10 @@ function Rem.findEnemy(npc, now)
     local assist = player ~= nil and Rem.isFriendly(npc) and Rem.playerFighting(now)
     local crowd = 0
 
-    local list = getCell():getZombieList()
-    for i = 0, list:size() - 1 do
-        local other = list:get(i)
-        if other ~= z and not other:isDead() and math.floor(other:getZ()) == zFloor then
+    local near = Rem.zombiesNear(z:getX(), z:getY(), math.max(B.CFG.SCAN_RADIUS, B.CFG.CROWD_RADIUS))
+    for i = 1, #near do
+        local other = near[i]
+        if other ~= z and math.floor(other:getZ()) == zFloor then
             local d = Rem.dist(z, other)
             local otherNpc = Rem.active[other]
             if not otherNpc and d <= B.CFG.CROWD_RADIUS then crowd = crowd + 1 end

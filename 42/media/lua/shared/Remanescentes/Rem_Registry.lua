@@ -40,9 +40,30 @@ local function upsert(list, entry)
 end
 
 -- fn(x, y, z, player): x, y = centro do quadrado clicado
-function Rem.registerDebugOption(labelKey, fn)
+-- group (opcional): sub-submenu das ferramentas de teste ("spawn", "world", "ambient",
+-- "reputation", "other" ou um novo). Sem ele, usa Rem.DEBUG_GROUP_OF / "other".
+function Rem.registerDebugOption(labelKey, fn, group)
     if type(labelKey) ~= "string" or type(fn) ~= "function" then return nil end
-    return upsert(Rem.debugOptions, { labelKey = labelKey, fn = fn })
+    return upsert(Rem.debugOptions, { labelKey = labelKey, fn = fn, group = group })
+end
+
+-- Grupos das ferramentas de teste (ordem de exibicao) e grupo padrao das opcoes do mod.
+Rem.DEBUG_GROUPS = Rem.DEBUG_GROUPS or { "spawn", "world", "ambient", "reputation", "other" }
+Rem.DEBUG_GROUP_OF = Rem.DEBUG_GROUP_OF or {
+    ContextMenu_Rem_SpawnAlly = "spawn", ContextMenu_Rem_SpawnCivil = "spawn", ContextMenu_Rem_SpawnRaider = "spawn",
+    ContextMenu_Rem_GroupHereCivil = "spawn", ContextMenu_Rem_GroupHereRaider = "spawn",
+    ContextMenu_Rem_NearestGroup = "world", ContextMenu_Rem_ListGroups = "world", ContextMenu_Rem_GoToGroup = "world",
+    ContextMenu_Rem_Simulate6 = "world", ContextMenu_Rem_SimDay = "world", ContextMenu_Rem_Relations = "world",
+    ContextMenu_Rem_FortifyNearest = "world", ContextMenu_Rem_Reseed = "world",
+    ContextMenu_Rem_RepUp = "reputation", ContextMenu_Rem_RepDown = "reputation",
+    ContextMenu_Rem_RemoveAll = "other",
+}
+
+function Rem.debugGroupOf(o)
+    if o.group then return o.group end
+    if Rem.DEBUG_GROUP_OF[o.labelKey] then return Rem.DEBUG_GROUP_OF[o.labelKey] end
+    if o.labelKey:sub(1, 20) == "ContextMenu_Rem_Amb_" then return "ambient" end
+    return "other"
 end
 
 -- fn(npc); condition(npc) -> bool (opcional; sem ela a opcao sempre aparece)

@@ -74,7 +74,7 @@ function IN.turnNow(npc)
         visual:setSkinTextureName(zombieSkin(rec.female))
         z:resetModel()
     end)
-    Rem.log(tostring(rec.name) .. " virou zumbi")
+    Rem.debug(tostring(rec.name) .. " virou zumbi")
     Rem.removePerson(rec.id)
 end
 

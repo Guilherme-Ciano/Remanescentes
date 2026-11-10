@@ -5,20 +5,28 @@ local Rem = Remanescentes
 
 -- quantas variacoes existem por categoria e cooldown proprio (ms)
 Rem.BARKS = {
-    hello  = { n = 4, cd = 0 },
-    spot   = { n = 5, cd = 20000 },
-    kill   = { n = 5, cd = 15000 },
-    hurt   = { urgent = true, n = 4, cd = 8000 },
-    flee   = { urgent = true, n = 4, cd = 12000 },
-    idle   = { n = 8, cd = 150000 },
-    follow = { n = 4, cd = 0 },
-    stay   = { n = 3, cd = 0 },
+    hello  = { n = 6, cd = 0 },
+    spot   = { n = 6, cd = 20000 },
+    kill   = { n = 6, cd = 15000 },
+    hurt   = { urgent = true, n = 5, cd = 8000 },
+    flee   = { urgent = true, n = 5, cd = 12000 },
+    idle   = { n = 10, cd = 150000 },
+    follow = { n = 5, cd = 0 },
+    stay   = { n = 4, cd = 0 },
     sneak  = { n = 3, cd = 0 },
     normal = { n = 3, cd = 0 },
-    hunted = { urgent = true, n = 3, cd = 20000 },
-    threat = { urgent = true, n = 4, cd = 30000 },
+    hunted = { urgent = true, n = 4, cd = 20000 },
+    threat = { urgent = true, n = 5, cd = 30000 },
     betrayed = { urgent = true, n = 3, cd = 0 },
+    -- tom pela personalidade (Rem.bark escolhe sozinho): durao (agressivo) e assustado (medroso)
+    spot_tough = { n = 4, cd = 20000 }, spot_scared = { n = 4, cd = 20000 },
+    kill_tough = { n = 4, cd = 15000 }, kill_scared = { n = 3, cd = 15000 },
+    hurt_tough = { urgent = true, n = 3, cd = 8000 }, hurt_scared = { urgent = true, n = 3, cd = 8000 },
+    flee_scared = { urgent = true, n = 3, cd = 12000 },
+    idle_tough = { n = 4, cd = 150000 }, idle_scared = { n = 4, cd = 150000 },
 }
+
+local TONE = { agressivo = "tough", medroso = "scared" }
 local B = Rem.module("Barks", {
     GLOBAL_CD = 6000,  -- tempo minimo entre quaisquer duas falas do mesmo sobrevivente
 })
@@ -38,7 +46,20 @@ function Rem.bark(npc, category, force)
     end
     npc.lastBark = now
     npc.barkAt[category] = now
-    local key = "IGUI_Rem_Bark_" .. category .. "_" .. tostring(ZombRand(def.n) + 1)
+    -- tom pela personalidade, se houver a versao da fala
+    local cat = category
+    local tone = Rem.temperOf and TONE[Rem.temperOf(npc)]
+    if tone and Rem.BARKS[category .. "_" .. tone] then
+        cat = category .. "_" .. tone
+        def = Rem.BARKS[cat]
+    end
+    local i = ZombRand(def.n) + 1
+    local prefix = "IGUI_Rem_Bark_" .. cat .. "_"
+    if prefix .. i == npc.lastBarkKey and def.n > 1 then   -- nao repete a mesma frase em seguida
+        i = i % def.n + 1
+    end
+    local key = prefix .. i
+    npc.lastBarkKey = key
     Rem.safe(function() npc.z:Say(getText(key)) end)
     return true
 end

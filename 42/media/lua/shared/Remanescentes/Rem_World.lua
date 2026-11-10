@@ -111,7 +111,7 @@ function Rem.createGroup(faction, x, y, bid, size, def)
             x = x + ZombRandFloat(-2, 2), y = y + ZombRandFloat(-2, 2), z = 0 })
         table.insert(g.members, p.id)
     end
-    Rem.log("grupo " .. g.id .. " (" .. faction .. ", " .. size .. " pessoas) mora em " .. x .. "," .. y)
+    Rem.debug("grupo " .. g.id .. " (" .. faction .. ", " .. size .. " pessoas) mora em " .. x .. "," .. y)
     Rem.emit("groupCreated", g, def)
     return g
 end
@@ -364,13 +364,13 @@ local function resolveRaid(g, members)
         local stolen = math.floor(loser.supplies / 2)
         loser.supplies = loser.supplies - stolen
         winner.supplies = winner.supplies + stolen
-        Rem.log("ataque: grupo " .. g.id .. " x " .. victim.id .. " -> venceu " .. winner.id)
+        Rem.debug("ataque: grupo " .. g.id .. " x " .. victim.id .. " -> venceu " .. winner.id)
         Rem.emit("raidResolved", g, victim, winner)
         -- (D3) atacantes acabaram com o grupo: tomam a base dele (fortificacoes e estoque)
         if winner == g and #membersOf(victim) == 0 and victim.home and victim.home.x1 then
             g.oldHome = g.home
             g.home = victim.home
-            Rem.log("grupo " .. g.id .. " (" .. g.faction .. ") tomou a base do grupo " .. victim.id)
+            Rem.debug("grupo " .. g.id .. " (" .. g.faction .. ") tomou a base do grupo " .. victim.id)
             Rem.emit("baseTaken", g, victim)
         end
     end
@@ -461,7 +461,7 @@ function Rem.simulateWorld(hours)
             store.abandoned = store.abandoned or {}
             if g and g.home and g.home.bid then store.abandoned[g.home.bid] = hour end
             store.groups[id] = nil
-            Rem.log("grupo " .. id .. " acabou")
+            Rem.debug("grupo " .. id .. " acabou")
             if g then Rem.emit("groupRemoved", g) end
         end
         Rem.emit("worldHour", hour)

@@ -1,9 +1,15 @@
 VERSION = 1,
 
-option Remanescentes.MaxActive
+option Remanescentes.NPCDifficulty
 {
-    type = integer, min = 0, max = 40, default = 12,
-    page = Remanescentes, translation = Remanescentes_MaxActive,
+    type = enum, numValues = 3, default = 2,
+    page = Remanescentes, translation = Remanescentes_NPCDifficulty,
+    valueTranslation = Remanescentes_NPCDifficulty,
+}
+option Remanescentes.NPCVsPlayerDamage
+{
+    type = double, min = 0.0, max = 5.0, default = 1.0,
+    page = Remanescentes, translation = Remanescentes_NPCVsPlayerDamage,
 }
 option Remanescentes.NPCHealth
 {
@@ -15,126 +21,120 @@ option Remanescentes.NPCDamageMultiplier
     type = double, min = 0.1, max = 10.0, default = 1.0,
     page = Remanescentes, translation = Remanescentes_NPCDamageMultiplier,
 }
-option Remanescentes.ZombieDamage
-{
-    type = double, min = 0.0, max = 2.0, default = 0.15,
-    page = Remanescentes, translation = Remanescentes_ZombieDamage,
-}
-option Remanescentes.FriendlyFire
-{
-    type = boolean, default = false,
-    page = Remanescentes, translation = Remanescentes_FriendlyFire,
-}
-option Remanescentes.DebugMenu
-{
-    type = boolean, default = true,
-    page = Remanescentes, translation = Remanescentes_DebugMenu,
-}
-option Remanescentes.Verbose
-{
-    type = boolean, default = false,
-    page = Remanescentes, translation = Remanescentes_Verbose,
-}
-option Remanescentes.ZombieSightRange
-{
-    type = integer, min = 2, max = 30, default = 10,
-    page = Remanescentes, translation = Remanescentes_ZombieSightRange,
-}
-option Remanescentes.NPCNoiseMultiplier
-{
-    type = double, min = 0.0, max = 5.0, default = 1.0,
-    page = Remanescentes, translation = Remanescentes_NPCNoiseMultiplier,
-}
 option Remanescentes.FleeHealthPercent
 {
     type = integer, min = 0, max = 90, default = 30,
     page = Remanescentes, translation = Remanescentes_FleeHealthPercent,
-}
-option Remanescentes.Barks
-{
-    type = boolean, default = true,
-    page = Remanescentes, translation = Remanescentes_Barks,
-}
-option Remanescentes.ZombieAttackMode
-{
-    type = enum, numValues = 2, default = 1,
-    page = Remanescentes, translation = Remanescentes_ZombieAttackMode,
-    valueTranslation = Remanescentes_ZombieAttackMode,
-}
-option Remanescentes.NPCVsPlayerDamage
-{
-    type = double, min = 0.0, max = 5.0, default = 1.0,
-    page = Remanescentes, translation = Remanescentes_NPCVsPlayerDamage,
-}
-option Remanescentes.WorldGroups
-{
-    type = integer, min = 0, max = 200, default = 40,
-    page = Remanescentes, translation = Remanescentes_WorldGroups,
-}
-option Remanescentes.RaiderPercent
-{
-    type = integer, min = 0, max = 100, default = 20,
-    page = Remanescentes, translation = Remanescentes_RaiderPercent,
-}
-option Remanescentes.ScavengeDeathChance
-{
-    type = integer, min = 0, max = 100, default = 8,
-    page = Remanescentes, translation = Remanescentes_ScavengeDeathChance,
-}
-option Remanescentes.LootLeftPercent
-{
-    type = integer, min = 0, max = 100, default = 15,
-    page = Remanescentes, translation = Remanescentes_LootLeftPercent,
-}
-option Remanescentes.FortifyHomes
-{
-    type = boolean, default = true,
-    page = Remanescentes, translation = Remanescentes_FortifyHomes,
-}
-option Remanescentes.NPCDifficulty
-{
-    type = enum, numValues = 3, default = 2,
-    page = Remanescentes, translation = Remanescentes_NPCDifficulty,
-    valueTranslation = Remanescentes_NPCDifficulty,
 }
 option Remanescentes.RaiderMugging
 {
     type = boolean, default = true,
     page = Remanescentes, translation = Remanescentes_RaiderMugging,
 }
+option Remanescentes.FriendlyFire
+{
+    type = boolean, default = false,
+    page = Remanescentes, translation = Remanescentes_FriendlyFire,
+}
+option Remanescentes.Barks
+{
+    type = boolean, default = true,
+    page = Remanescentes, translation = Remanescentes_Barks,
+}
+option Remanescentes.MaxActive
+{
+    type = integer, min = 0, max = 40, default = 12,
+    page = Remanescentes, translation = Remanescentes_MaxActive,
+}
 option Remanescentes.CollapsePace
 {
     type = enum, numValues = 3, default = 2,
-    page = Remanescentes, translation = Remanescentes_CollapsePace,
+    page = RemanescentesMundo, translation = Remanescentes_CollapsePace,
     valueTranslation = Remanescentes_CollapsePace,
 }
 option Remanescentes.RaiderStartDay
 {
     type = integer, min = 0, max = 60, default = 4,
-    page = Remanescentes, translation = Remanescentes_RaiderStartDay,
+    page = RemanescentesMundo, translation = Remanescentes_RaiderStartDay,
 }
-option Remanescentes.AmbientDensity
+option Remanescentes.WorldGroups
 {
-    type = integer, min = 0, max = 300, default = 100,
-    page = Remanescentes, translation = Remanescentes_AmbientDensity,
-}
-option Remanescentes.NPCsTurn
-{
-    type = boolean, default = true,
-    page = Remanescentes, translation = Remanescentes_NPCsTurn,
-}
-option Remanescentes.NPCInfectionChance
-{
-    type = integer, min = 0, max = 100, default = 25,
-    page = Remanescentes, translation = Remanescentes_NPCInfectionChance,
+    type = integer, min = 0, max = 200, default = 40,
+    page = RemanescentesMundo, translation = Remanescentes_WorldGroups,
 }
 option Remanescentes.GroupDensity
 {
     type = integer, min = 0, max = 300, default = 100,
-    page = Remanescentes, translation = Remanescentes_GroupDensity,
+    page = RemanescentesMundo, translation = Remanescentes_GroupDensity,
+}
+option Remanescentes.RaiderPercent
+{
+    type = integer, min = 0, max = 100, default = 20,
+    page = RemanescentesMundo, translation = Remanescentes_RaiderPercent,
+}
+option Remanescentes.AmbientDensity
+{
+    type = integer, min = 0, max = 300, default = 100,
+    page = RemanescentesMundo, translation = Remanescentes_AmbientDensity,
+}
+option Remanescentes.FortifyHomes
+{
+    type = boolean, default = true,
+    page = RemanescentesMundo, translation = Remanescentes_FortifyHomes,
 }
 option Remanescentes.BaseFallRate
 {
     type = integer, min = 0, max = 500, default = 100,
-    page = Remanescentes, translation = Remanescentes_BaseFallRate,
+    page = RemanescentesMundo, translation = Remanescentes_BaseFallRate,
+}
+option Remanescentes.ScavengeDeathChance
+{
+    type = integer, min = 0, max = 100, default = 8,
+    page = RemanescentesMundo, translation = Remanescentes_ScavengeDeathChance,
+}
+option Remanescentes.LootLeftPercent
+{
+    type = integer, min = 0, max = 100, default = 15,
+    page = RemanescentesMundo, translation = Remanescentes_LootLeftPercent,
+}
+option Remanescentes.ZombieAttackMode
+{
+    type = enum, numValues = 2, default = 1,
+    page = RemanescentesZumbis, translation = Remanescentes_ZombieAttackMode,
+    valueTranslation = Remanescentes_ZombieAttackMode,
+}
+option Remanescentes.ZombieDamage
+{
+    type = double, min = 0.0, max = 2.0, default = 0.15,
+    page = RemanescentesZumbis, translation = Remanescentes_ZombieDamage,
+}
+option Remanescentes.ZombieSightRange
+{
+    type = integer, min = 2, max = 30, default = 10,
+    page = RemanescentesZumbis, translation = Remanescentes_ZombieSightRange,
+}
+option Remanescentes.NPCNoiseMultiplier
+{
+    type = double, min = 0.0, max = 5.0, default = 1.0,
+    page = RemanescentesZumbis, translation = Remanescentes_NPCNoiseMultiplier,
+}
+option Remanescentes.NPCsTurn
+{
+    type = boolean, default = true,
+    page = RemanescentesZumbis, translation = Remanescentes_NPCsTurn,
+}
+option Remanescentes.NPCInfectionChance
+{
+    type = integer, min = 0, max = 100, default = 25,
+    page = RemanescentesZumbis, translation = Remanescentes_NPCInfectionChance,
+}
+option Remanescentes.DebugMenu
+{
+    type = boolean, default = false,
+    page = RemanescentesTeste, translation = Remanescentes_DebugMenu,
+}
+option Remanescentes.Verbose
+{
+    type = boolean, default = false,
+    page = RemanescentesTeste, translation = Remanescentes_Verbose,
 }
