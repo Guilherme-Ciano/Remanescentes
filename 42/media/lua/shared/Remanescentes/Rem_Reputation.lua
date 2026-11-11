@@ -28,6 +28,8 @@ local R = Rem.Reputation
 R.CFG = {
     MIN = -100, MAX = 100,
     HOSTILE_AT = -40,
+    BOND_WEIGHT = 0.6,
+    GREET_BOND = 15,            -- vinculo (ou rancor) a partir do qual o cumprimento e pessoal          -- quanto o vinculo pessoal (rec.bond) pesa na atitude
     FRIENDLY_AT = 20,
     HIT = -10, KILL = -40, HELP = 2, KILL_RAIDER = 3, TRESPASS = -10, THEFT = -15,
     RAIDER_NEWS_RADIUS = 100,     -- grupos a essa distancia ficam sabendo que voce matou um saqueador
@@ -49,6 +51,8 @@ R.state = R.state or {}
 Rem.BARKS.greet_friendly = { n = 4, cd = 120000 }
 Rem.BARKS.greet_neutral = { n = 4, cd = 120000 }
 Rem.BARKS.greet_cold = { n = 3, cd = 120000 }
+Rem.BARKS.greet_bond = { n = 3, cd = 120000 }
+Rem.BARKS.greet_grudge = { n = 3, cd = 120000 }
 Rem.BARKS.warn = { urgent = true, n = 4, cd = 8000 }
 Rem.BARKS.angry = { urgent = true, n = 3, cd = 15000 }
 Rem.BARKS.thief = { urgent = true, n = 3, cd = 15000 }
@@ -109,7 +113,9 @@ end
 
 function Rem.attitudeOf(rec)
     if rec.faction == "aliados" then return "amigavel" end
-    local score = Rem.repOf(rec) - R.harshness(rec)
+    -- o que voce fez por (ou contra) esta pessoa pesa alem da fama com o grupo (Rem_Bonds)
+    local score = Rem.repOf(rec) - R.harshness(rec) + (rec.bond or 0) * R.CFG.BOND_WEIGHT
+        + (Rem.Fame and Rem.Fame.attitudeMod(rec) or 0)              -- o que dizem de voce (Rem_Fame)
     if score <= R.CFG.HOSTILE_AT then return "hostil" end
     if score >= R.CFG.FRIENDLY_AT then return "amigavel" end
     return "neutro"
@@ -122,8 +128,8 @@ end
 
 -- Aplica a atitude na pessoa (rec.hostileToPlayer e o que o cerebro usa).
 function R.apply(rec, now)
-    if rec.faction == "aliados" or rec.betrayed then return end
-    if rec.surrendered then rec.hostileToPlayer = false return end   -- rendido (Rem_Mugging)
+    if rec.faction == "aliados" or rec.betrayed or rec.disguised then return end
+    if rec.surrendered or rec.prisoner then rec.hostileToPlayer = false return end   -- rendido (Rem_Mugging), preso (Rem_Prisoners)
     now = now or Rem.nowMs()
     rec.attitude = Rem.attitudeOf(rec)
     rec.hostileToPlayer = (rec.attitude == "hostil") or isAngry(repKey(rec), now)
@@ -181,6 +187,7 @@ Events.OnHitZombie.Add(function(zombie, attacker)
     local npc = Rem.active[zombie]
     if not npc or not Rem.isPlayerObj(attacker) then return end
     local rec = npc.rec
+    if not rec.hostileToPlayer then Rem.emit("playerDeed", "hit", npc) end
     if rec.faction == "aliados" or rec.hostileToPlayer then return end
     local key = repKey(rec)
     Rem.changeRep(key, R.CFG.HIT, "golpe")
@@ -195,6 +202,8 @@ end
 Rem.on("npcDied", function(npc)
     if not killedByPlayer(npc.z) then return end
     local rec = npc.rec
+    -- (avisa antes de mexer na reputacao: depois disso a vitima ja "estava com raiva")
+    Rem.emit("playerKilled", npc, Rem.isHostileToPlayer(npc))
     if Rem.isHostileToPlayer(npc) then
         -- matou alguem hostil (saqueador): quem e inimigo dele perto aprova
         local x, y = npc.z:getX(), npc.z:getY()
@@ -217,6 +226,7 @@ Events.OnZombieDead.Add(function(zombie)
     local h = Rem.hunting and Rem.hunting[zombie]
     if not h or not h.npc or not killedByPlayer(zombie) then return end
     local rec = h.npc.rec
+    if not rec.hostileToPlayer then Rem.emit("playerDeed", "saved", h.npc) end
     if rec.faction == "aliados" or rec.hostileToPlayer then return end
     Rem.changeRep(repKey(rec), R.CFG.HELP, "ajudou")
     Rem.bark(h.npc, "thanks")
@@ -285,7 +295,10 @@ function R.greet(player, now)
             and now - (npc.greetAt or -R.CFG.GREET_CD_MS) >= R.CFG.GREET_CD_MS then
             npc.greetAt = now
             local cat = "greet_neutral"
-            if rec.attitude == "amigavel" then cat = "greet_friendly"
+            local bond = rec.bond or 0
+            if bond >= R.CFG.GREET_BOND then cat = "greet_bond"            -- lembra de voce (Rem_Bonds)
+            elseif bond <= -R.CFG.GREET_BOND then cat = "greet_grudge"
+            elseif rec.attitude == "amigavel" then cat = "greet_friendly"
             elseif Rem.trait(rec, "agressividade") >= 7 then cat = "greet_cold" end
             Rem.bark(npc, cat)
         end
@@ -300,7 +313,7 @@ end
 function R.checkTheft(player)
     for gid, g in pairs(Rem.getStore().groups) do
         local h = g.home
-        if h and h.stash and insideBase(g, player:getX(), player:getY()) then
+        if h and h.stash and not g.player and insideBase(g, player:getX(), player:getY()) then
             local n = stashCount(h)
             if n then
                 if h.stashCount and n < h.stashCount then
@@ -333,8 +346,9 @@ end)
 Rem.registerNpcOption("ContextMenu_Rem_Profile", function(npc)
     local rec = npc.rec
     Rem.safe(function()
-        npc.z:Say(Rem.profileText(rec) .. "  |  " .. getText("IGUI_Rem_Att_" .. tostring(rec.attitude or Rem.attitudeOf(rec)))
-            .. " (" .. tostring(Rem.repOf(rec)) .. ")")
+        if Rem.showProfile then return Rem.showProfile(npc) end   -- janela (client/Rem_DialogUI.lua)
+        Rem.speak(npc, Rem.profileText(rec) .. "  |  " .. getText("IGUI_Rem_Att_" .. tostring(rec.attitude or Rem.attitudeOf(rec)))
+            .. " (" .. tostring(math.floor(Rem.repOf(rec))) .. ")")
     end)
 end)
 

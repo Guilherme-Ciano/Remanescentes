@@ -37,6 +37,7 @@ end
 -- Postura para percorrer dist tiles: corre se for longe (a menos que furtivo).
 function Rem.travelGait(npc, dist)
     if npc.rec.stealth then return "sneak" end
+    if npc.rec.wound and npc.rec.wound.kind == "perna" then return "walk" end   -- mancando (Rem_Wounds)
     if dist > B.CFG.RUN_DIST then return "run" end
     return "walk"
 end
@@ -57,8 +58,42 @@ function Rem.clearRest(npc)
     if npc.rest then Rem.setRest(npc, nil) end
 end
 
+-- Quadrado onde da para ficar de pe para mexer em algo que esta num quadrado solido
+-- (armario, balcao, geladeira): o proprio, se for livre, ou o vizinho livre mais perto de
+-- (fromX, fromY) sem parede no meio. Retorna x, y, z do centro (ou o proprio quadrado).
+function Rem.standSquare(sq, fromX, fromY)
+    if not sq then return nil end
+    local sx, sy, sz = sq:getX(), sq:getY(), sq:getZ()
+    if sq:isFree(false) then return sx + 0.5, sy + 0.5, sz end
+    local cell = getCell()
+    local best, bestD = nil, math.huge
+    for _, off in ipairs({ { 0, 1 }, { 1, 0 }, { 0, -1 }, { -1, 0 }, { 1, 1 }, { -1, 1 }, { 1, -1 }, { -1, -1 } }) do
+        local n = cell:getGridSquare(sx + off[1], sy + off[2], sz)
+        if n and n:isFree(false) then
+            local reachable = true
+            if AdjacentFreeTileFinder and AdjacentFreeTileFinder.privTrySquare then
+                local ok, res = pcall(AdjacentFreeTileFinder.privTrySquare, sq, n)
+                if ok then reachable = res == true end
+            end
+            if reachable then
+                local d = Rem.dist2(fromX or sx, fromY or sy, n:getX() + 0.5, n:getY() + 0.5)
+                    + ((off[1] ~= 0 and off[2] ~= 0) and 0.5 or 0)        -- prefere de frente
+                if d < bestD then best, bestD = n, d end
+            end
+        end
+    end
+    if best then return best:getX() + 0.5, best:getY() + 0.5, sz end
+    return sx + 0.5, sy + 0.5, sz
+end
+
 function Rem.moveTo(npc, x, y, z, now, gait)
     Rem.clearRest(npc)
+    npc.wantAt, npc.wantX, npc.wantY = now, x, y     -- (Rem_Doors: quer andar para la)
+    -- desvio curto para destravar (Rem_Doors.unstick): por um instante vai para o lado
+    local det = npc.detour
+    if det then
+        if now < det.untilMs then x, y = det.x, det.y else npc.detour = nil end
+    end
     Rem.setGait(npc, gait or Rem.baseGait(npc))
     if now < npc.nextPath and npc.lastPathX and math.abs(npc.lastPathX - x) < 1 and math.abs(npc.lastPathY - y) < 1 then
         return

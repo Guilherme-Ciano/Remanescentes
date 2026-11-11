@@ -25,6 +25,7 @@ local SC = Rem.module("Scavenge", {
     DEPOSIT_PRIORITY = 80,   -- guardar o saque vem antes de curar, seguir, descansar
     NEAR_TARGET = 14,        -- a essa distancia do predio-alvo comeca a procurar armarios
     TOUCH = 1.6,
+    STUCK_MS = 12000,        -- tempo tentando chegar num armario antes de desistir dele
     SEARCH_MS = 2500,        -- tempo revirando cada armario
     TAKE_PER_VISIT = 3,
     CARRY_MAX = 8,
@@ -198,7 +199,16 @@ function SC.behavior(npc, ctx, now)
     end
     local cx, cy = cur.sq:getX() + 0.5, cur.sq:getY() + 0.5
     if Rem.dist2(npc.z:getX(), npc.z:getY(), cx, cy) > CFG.TOUCH then
-        Rem.moveTo(npc, cx, cy, cur.sq:getZ(), now, Rem.baseGait(npc))
+        -- armario fica num quadrado solido: vai ate o quadrado livre ao lado
+        cur.since = cur.since or now
+        if now - cur.since > CFG.STUCK_MS then      -- nao consegue chegar: desiste deste
+            t.visited = t.visited or {}
+            t.visited[cur.key] = true
+            npc.lootTarget, npc.lootUntil = nil, nil
+            return true
+        end
+        local sx, sy, sz = Rem.standSquare(cur.sq, npc.z:getX(), npc.z:getY())
+        Rem.moveTo(npc, sx, sy, sz, now, Rem.baseGait(npc))
         return true
     end
     Rem.stopMoving(npc)
@@ -274,7 +284,8 @@ function SC.syncNear(player, now)
     local px, py = player:getX(), player:getY()
     for gid, g in pairs(Rem.getStore().groups) do
         local h = g.home
-        if h and h.stocked and h.stash and now - (lastSync[gid] or -CFG.SYNC_MS) >= CFG.SYNC_MS
+        -- (a base do jogador tem a conta dela, Rem_PlayerBase: nunca apaga os itens dele)
+        if h and h.stocked and h.stash and not g.player and now - (lastSync[gid] or -CFG.SYNC_MS) >= CFG.SYNC_MS
             and Rem.dist2(px, py, h.x, h.y) < Rem.Safehouse.CFG.PREPARE_RADIUS then
             lastSync[gid] = now
             Rem.safe(SC.syncStash, g)

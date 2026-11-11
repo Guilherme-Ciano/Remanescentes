@@ -37,6 +37,7 @@ require "Remanescentes/Rem_Movement"
 require "Remanescentes/Rem_Behaviors"
 require "Remanescentes/Rem_Awareness"
 require "Remanescentes/Rem_Spatial"
+require "Remanescentes/Rem_Tactics"
 local Rem = Remanescentes
 
 local B = Rem.module("Brain", {
@@ -55,9 +56,10 @@ local B = Rem.module("Brain", {
     PLAYER_FIGHT_MS = 10000,    -- quanto tempo "o jogador esta brigando" dura apos um golpe
     CROWD_RADIUS = 5,
     LEASH = 8,                  -- seguidor nao se afasta mais que isso do jogador por um zumbi
-    OUTNUMBERED = { cauteloso = 4, defensivo = 5 }, -- zumbis em volta para recuar
-    SCARED_RADIUS = 6,          -- medroso foge de ameacas a essa distancia
-    SPAWN_SETTLE_MS = 3000,     -- corpo recem-criado pode ficar sem quadrado por esse tempo
+    HELP_RADIUS = 7,            -- zumbi atras de um companheiro a essa distancia: ajuda
+    CLEAR_MARGIN = 12,          -- "limpando a rua" (Rem_Director): zumbis ate isso alem da casa
+    SPAWN_SETTLE_MS = 3000,
+    WAKE_DIST = 8,              -- dormindo: acorda com inimigo a essa distancia     -- corpo recem-criado pode ficar sem quadrado por esse tempo
 })
 
 -- ---------------------------------------------------------------- comportamentos
@@ -89,6 +91,14 @@ end
 function Rem.isThreat(npc, zombie, d, player, assist)
     if d <= B.CFG.CLOSE_THREAT then return true end
     if d <= B.CFG.THREAT_RADIUS and (Rem.isAware(zombie, npc) or zombie:getTarget() == npc.z) then return true end
+    -- zumbi atras de um companheiro por perto: ninguem deixa o outro apanhar sozinho
+    if d <= B.CFG.HELP_RADIUS then
+        local h = Rem.hunting and Rem.hunting[zombie]
+        if h and h.npc and h.npc ~= npc and not Rem.npcsHostile(npc, h.npc)
+            and Rem.isHostileToPlayer(h.npc) == Rem.isHostileToPlayer(npc) then
+            return true
+        end
+    end
     if player and Rem.isFriendly(npc) then
         local pd = Rem.dist(zombie, player)
         if pd <= B.CFG.GUARD_RADIUS and zombie:getTarget() == player then return true end
@@ -104,7 +114,7 @@ function Rem.findEnemy(npc, now)
     local z = npc.z
     local zFloor = math.floor(z:getZ())
     local best, bestD = nil, B.CFG.SCAN_RADIUS
-    local aggressive = Rem.temperOf(npc) == "agressivo"
+    local aggressive = Rem.temperOf(npc) == "agressivo" or npc.rec.stance == "aggressive"
     local player = getPlayer()
     if player and player:isDead() then player = nil end
     local assist = player ~= nil and Rem.isFriendly(npc) and Rem.playerFighting(now)
@@ -119,7 +129,8 @@ function Rem.findEnemy(npc, now)
             if not otherNpc and d <= B.CFG.CROWD_RADIUS then crowd = crowd + 1 end
             if d < bestD then
                 if not otherNpc then
-                    if aggressive or Rem.isThreat(npc, other, d, player, assist) then
+                    if aggressive or Rem.isThreat(npc, other, d, player, assist)
+                        or (npc.clearing and Rem.Director and Rem.Director.inClearZone(npc, other)) then
                         best, bestD = other, d
                     end
                 elseif Rem.npcsHostile(npc, otherNpc) and Rem.Awareness.sees(npc, other, d) then
@@ -183,11 +194,30 @@ function Rem.think(npc, now)
     local temper = Rem.temperOf(npc)
     local player = getPlayer()
     local isZombie = enemy ~= nil and not Rem.active[enemy] and not Rem.isPlayerObj(enemy)
+    local leash = B.CFG.LEASH * ((rec.stance == "aggressive") and 2 or 1)
 
     -- seguidor nao larga o jogador para correr atras de zumbi longe dele
     if enemy and isZombie and rec.mode == "follow" and player and d > Rem.reach(npc)
-        and Rem.dist(enemy, player) > B.CFG.LEASH then
+        and Rem.dist(enemy, player) > leash then
         enemy, d = nil, nil
+    end
+
+    -- dormindo (cochilo, noite em casa) e o perigo chegou perto: acorda
+    if enemy and npc.rest == "sleep" and d and d < B.CFG.WAKE_DIST then
+        Rem.clearRest(npc)
+        rec.napUntil = nil
+        Rem.bark(npc, "wake", true)
+    end
+
+    -- ordens de combate do jogador (Rem_Orders) e prisioneiros: filtram o inimigo
+    if Rem.Orders then
+        local flee
+        enemy, d, flee = Rem.Orders.filter(npc, enemy, d, now)
+        if flee and enemy then
+            Rem.flee(npc, enemy, now)
+            return
+        end
+        isZombie = enemy ~= nil and not Rem.active[enemy] and not Rem.isPlayerObj(enemy)
     end
 
     -- 0b. saqueador exigindo / grupo fugindo / rendicao (Rem_Mugging): decide antes da
@@ -195,12 +225,11 @@ function Rem.think(npc, now)
     if enemy and Rem.Mugging and Rem.isPlayerObj(enemy) and Rem.Mugging.handle(npc, enemy, d, now) then return end
 
     -- 1. fugir: pouca vida, em desvantagem, ou medo
+    --    (contra zumbis e outros sobreviventes cada um pesa o perigo: Rem_Tactics)
     local fleeAt = Rem.cfg("FleeHealthPercent", 30) / 100
-    local limit = B.CFG.OUTNUMBERED[temper]
-    local outnumbered = limit ~= nil and (npc.crowd or 0) >= limit
-        and not (temper == "defensivo" and Rem.playerFighting(now))
-    local scared = temper == "medroso" and d ~= nil and d <= B.CFG.SCARED_RADIUS
-    if enemy and (Rem.healthFraction(npc) < fleeAt or outnumbered or scared) then
+    local overwhelmed = enemy ~= nil and not Rem.isPlayerObj(enemy)
+        and Rem.Tactics.decide(npc, enemy, d, now) == "flee"
+    if enemy and (Rem.healthFraction(npc) < fleeAt or overwhelmed) then
         npc.fleeing = true
     elseif npc.fleeing and (not enemy or d > B.CFG.SAFE_DIST) then
         npc.fleeing = false
@@ -233,6 +262,8 @@ function Rem.think(npc, now)
             engage = Rem.Awareness.CFG.CHASE_MAX -- perseguindo voce (Rem_Awareness ja decide quando desistir)
         elseif not isZombie then
             engage = B.CFG.HOSTILE_SIGHT -- pessoas hostis: vai atras
+        elseif npc.clearing or rec.stance == "aggressive" or (Rem.Orders and Rem.Orders.isFocus(enemy)) then
+            engage = B.CFG.SCAN_RADIUS      -- limpando a rua (Rem_Director), atacar a vontade ou alvo marcado (Rem_Orders)
         elseif rec.stealth and not Rem.isAware(enemy, npc) then
             engage = B.CFG.STEALTH_ENGAGE
         end

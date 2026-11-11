@@ -19,6 +19,11 @@ local function symbol(kind, name, x, y)
     function s:setRGBA(r, g, b, a) self.r, self.g, self.b = r, g, b end
     function s:setAnchor() end
     function s:setScale(v) self.scale = v end
+    function s:getScale() return self.scale end
+    function s:getWorldX() return self.x end
+    function s:getWorldY() return self.y end
+    function s:isTexture() return self.kind == "tex" end
+    function s:isText() return self.kind == "text" end
     table.insert(calls, s)
     return s
 end
@@ -26,6 +31,9 @@ local symbolsAPI = {
     addTexture = function(_, name, x, y) return symbol("tex", name, x, y) end,
     addUntranslatedText = function(_, text, layer, x, y) return symbol("text", text, x, y) end,
     getDefaultTextLayerID = function() return "default" end,
+    getSymbolCount = function() return #calls end,
+    getSymbolByIndex = function(_, i) return calls[i + 1] end,
+    removeSymbolByIndex = function(_, i) table.remove(calls, i + 1) end,
 }
 ISMap = { SCALE = 0.666 }
 ISWorldMap = { ShowWorldMap = function()
@@ -97,10 +105,77 @@ for _, c in ipairs(calls) do
     if c.kind == "tex" and c.name == "Circle" then circles = circles + 1 end
     if c.kind == "text" then texts = texts + 1 end
 end
-check(circles == pending and texts == pending and #MM.pending() == 0, "ao abrir o mapa: circulo, simbolo e anotacao de cada marcacao")
+local spots = {}
+for _, m in ipairs(Rem.getStore().mapMarks) do spots[m.bx .. "," .. m.by] = true end
+local nSpots = 0
+for _ in pairs(spots) do nSpots = nSpots + 1 end
+check(texts == pending and circles == nSpots and #MM.pending() == 0, "ao abrir o mapa: simbolo e anotacao de cada marcacao, um circulo por lugar")
+-- varias marcacoes na mesma casa (grupo, abrigo, missao): lado a lado, sem se sobrepor
+local overlap = 0
+local list = Rem.getStore().mapMarks
+for i = 1, #list do
+    for j = i + 1, #list do
+        if math.abs(list[i].x - list[j].x) < MM.CFG.SLOT - 0.5 and math.abs(list[i].y - list[j].y) < MM.CFG.SLOT - 0.5 then overlap = overlap + 1 end
+    end
+end
+local shared = 0
+for _, m in ipairs(list) do if m.slot and m.slot > 1 then shared = shared + 1 end end
+check(shared >= 1 and overlap == 0, "marcacoes do mesmo lugar ficam lado a lado (" .. shared .. " deslocadas, " .. overlap .. " sobrepostas)")
 local circle = nil
 for _, c in ipairs(calls) do if c.name == "Circle" then circle = c break end end
-check(circle and circle.r and circle.scale > ISMap.SCALE, "circulo colorido e maior que o simbolo")
+check(circle and circle.r and circle.scale == MM.CFG.CIRCLE_SCALE and circle.scale > MM.CFG.SYMBOL_SCALE, "circulo colorido e maior que o simbolo")
+local textSym = nil
+for _, c in ipairs(calls) do if c.kind == "text" then textSym = c break end end
+check(textSym.scale == MM.CFG.TEXT_SCALE and textSym.scale < 0.5, "anotacao pequena (menor que uma nota escrita a mao)")
+-- o tamanho nao segue o ISMap.SCALE (mod Map Symbol Size Slider no maximo deixava tudo gigante)
+ISMap.SCALE = 2.266
+MM.add({ id = "teste:escala", x = 33600, y = 33600, symbol = "Star", color = MM.COLORS.quest, text = "y" })
+local big = false
+for _, c in ipairs(calls) do if c.x == 33600 and c.scale > 1 then big = true end end
+check(not big, "tamanho fixo, mesmo com a escala do mapa no maximo")
+ISMap.SCALE = 0.666
+-- marcacoes desenhadas por uma versao antiga (enormes, umas por cima das outras): refeitas
+local first = Rem.getStore().mapMarks[1]
+local foreign = symbol("tex", "Star", 99999, first.y)   -- simbolo seu, de outro lugar
+foreign.scale = 3
+calls = { foreign }
+for _, m in ipairs(Rem.getStore().mapMarks) do      -- como a 0.11 desenhava: tudo no ponto, gigante
+    m.x, m.y, m.slot, m.drawnX, m.drawnY = m.bx, m.by, nil, nil, nil
+    local c = symbol("tex", "Circle", m.x, m.y); c.scale = 4.98
+    local sy = symbol("tex", m.symbol, m.x, m.y); sy.scale = 2.266
+    local t = symbol("text", m.text or "", m.x, m.y - 14); t.scale = 2.266
+end
+Rem.getStore().mapMarksScale = nil
+ISWorldMap.ShowWorldMap(0)
+local wrong, big = 0, 0
+for _, c in ipairs(calls) do
+    if c ~= foreign then
+        local want = (c.kind == "text") and MM.CFG.TEXT_SCALE or ((c.name == "Circle") and MM.CFG.CIRCLE_SCALE or MM.CFG.SYMBOL_SCALE)
+        if c.scale ~= want then wrong = wrong + 1 end
+        if c.scale > 1 then big = big + 1 end
+    end
+end
+check(big == 0 and wrong == 0 and Rem.getStore().mapMarksScale == MM.CFG.SCALE_VERSION, "marcacoes antigas sao refeitas no tamanho certo (" .. wrong .. " erradas)")
+local nMarks = #Rem.getStore().mapMarks
+spots, nSpots = {}, 0
+for _, m in ipairs(Rem.getStore().mapMarks) do if not spots[m.bx .. "," .. m.by] then spots[m.bx .. "," .. m.by] = true nSpots = nSpots + 1 end end
+check(#calls == 1 + 2 * nMarks + nSpots, "(os simbolos antigos foram apagados, nao duplicados: " .. #calls .. " = 1 + " .. 2 * nMarks .. " + " .. nSpots .. ")")
+local overlap2 = 0
+local tex = {}
+for _, c in ipairs(calls) do if c.kind == "tex" and c.name ~= "Circle" then table.insert(tex, c) end end
+for i = 1, #tex do for j = i + 1, #tex do
+    if math.abs(tex[i].x - tex[j].x) < 1 and math.abs(tex[i].y - tex[j].y) < 1 then overlap2 = overlap2 + 1 end
+end end
+check(overlap2 == 0, "e cada uma na sua vaga")
+check(foreign.scale == 3, "simbolos que nao sao do mod nao sao tocados")
+local mine = nil
+for _, c in ipairs(calls) do if c.kind == "tex" and c.name ~= "Circle" and c ~= foreign then mine = c break end end
+mine.scale = 1.5                                  -- voce mudou o tamanho de um deles depois
+local nCalls = #calls
+ISWorldMap.ShowWorldMap(0)
+local still = false
+for _, c in ipairs(calls) do if c == mine then still = true end end
+check(still and mine.scale == 1.5 and #calls == nCalls, "o redesenho acontece uma vez so (nao desfaz o que voce mudar depois)")
 local n = #calls
 ISWorldMap.ShowWorldMap(0)
 check(#calls == n, "reabrir o mapa nao desenha de novo")

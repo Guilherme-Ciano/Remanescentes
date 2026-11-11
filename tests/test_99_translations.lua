@@ -46,13 +46,48 @@ for _, lang in ipairs({ "PTBR", "EN" }) do
     end
     check(#missingVar == 0, lang .. ": todas as variacoes das respostas tem texto " .. table.concat(missingVar, ", "))
 
+    -- vida dos personagens: conversas, jeito, humor, lembrancas, historia, opcoes novas
+    local missingLife = {}
+    local function need(key) if not ui[key] then table.insert(missingLife, key) end end
+    for topic, def in pairs(Rem.Banter.TOPICS) do
+        for i = 1, def.n do
+            for turn = 1, Rem.Banter.TURNS do need("IGUI_Rem_Banter_" .. topic .. "_" .. i .. "_" .. turn) end
+        end
+    end
+    for _, q in ipairs(Rem.Persona.QUIRKS) do need("IGUI_Rem_Quirk_" .. q) end
+    for _, m in ipairs({ "calmo", "ferido", "doente", "luto", "faminto", "animado", "abatido", "cansado" }) do need("IGUI_Rem_Mood_" .. m) end
+    -- opcoes de conversa do pacote 0.18 (necessidades, combate, prisioneiros) e o painel
+    for _, id in ipairs({ "feed", "nap", "order_stance_normal", "order_stance_hold", "order_stance_aggressive", "order_retreat",
+        "prisoner_take", "prisoner_hold", "prisoner_interrogate", "prisoner_ransom", "prisoner_recruit", "prisoner_release" }) do
+        need("IGUI_Rem_Opt_" .. id)
+    end
+    for _, st in ipairs(Rem.Orders.CFG.STANCES) do need("IGUI_Rem_Order_stance_" .. st) end
+    for _, k in ipairs({ "IGUI_Rem_Panel_title", "IGUI_Rem_Panel_member", "IGUI_Rem_Panel_shift", "IGUI_Rem_Panel_prisoner",
+        "IGUI_Rem_Panel_hint", "IGUI_Rem_Hint_prisoner", "IGUI_Rem_Prisoner_talk_raid" }) do need(k) end
+    for kind in pairs(Rem.Bonds.REMEMBER) do need("IGUI_Rem_Mem_" .. kind) end
+    for i = 1, Rem.Persona.STORY_LOST do need("IGUI_Rem_Story_lost_" .. i) end
+    for i = 1, Rem.Persona.STORY_GOAL do need("IGUI_Rem_Story_goal_" .. i) end
+    for _, k in ipairs({ "IGUI_Rem_About", "IGUI_Rem_Story_intro", "IGUI_Rem_Story_intro_none", "IGUI_Rem_Opt_about",
+        "IGUI_Rem_Opt_gift", "IGUI_Rem_Map_siege", "IGUI_Rem_Profile_quirk", "IGUI_Rem_Profile_mood", "IGUI_Rem_Profile_bond",
+        "IGUI_Rem_Profile_level", "IGUI_Rem_Profile_memories", "IGUI_Rem_Profile_nomem", "IGUI_Rem_Profile_story",
+        "IGUI_Rem_Profile_nostory" }) do need(k) end
+    if Rem.BaseBuild then
+        for _, pj in ipairs(Rem.BaseBuild.PROJECTS) do
+            need("IGUI_Rem_Project_" .. pj)
+            need("IGUI_Rem_Journal_ev_done_" .. pj)
+        end
+    end
+    check(#missingLife == 0, lang .. ": conversas, jeito, humor, lembrancas e historia tem texto " .. table.concat(missingLife, ", "))
+
     local cm = readJson(base .. lang .. "/ContextMenu.json") or {}
     local missingMenu = {}
     for _, o in ipairs(Rem.debugOptions or {}) do
         if not cm[o.labelKey or o.key or o.label or ""] then table.insert(missingMenu, tostring(o.labelKey or o.key or o.label)) end
     end
-    for _, o in ipairs(Rem.npcOptions or {}) do
-        if not cm[o.labelKey or o.key or o.label or ""] then table.insert(missingMenu, tostring(o.labelKey or o.key or o.label)) end
+    for _, list in ipairs({ Rem.npcOptions or {}, Rem.playerOptions or {}, Rem.targetOptions or {} }) do
+        for _, o in ipairs(list) do
+            if not cm[o.labelKey or ""] then table.insert(missingMenu, tostring(o.labelKey)) end
+        end
     end
     check(#missingMenu == 0, lang .. ": todas as opcoes de menu tem texto " .. table.concat(missingMenu, ", "))
     local missingGrp = {}

@@ -44,12 +44,23 @@ function Rem.bark(npc, category, force)
         if not def.urgent and now - (npc.lastBark or -B.CFG.GLOBAL_CD) < B.CFG.GLOBAL_CD then return false end
         if now - (npc.barkAt[category] or -def.cd) < def.cd then return false end
     end
+    -- versao da fala pelo jeito/humor da pessoa (Rem.barkVariant, definido em Rem_Persona):
+    -- devolve outra categoria, nil (segue o normal) ou false (fica calado desta vez)
+    local cat = category
+    local alt = nil
+    if Rem.barkVariant then alt = Rem.barkVariant(npc, category, force) end
+    if alt == false then
+        npc.barkAt[category] = now
+        return false
+    end
     npc.lastBark = now
     npc.barkAt[category] = now
-    -- tom pela personalidade, se houver a versao da fala
-    local cat = category
     local tone = Rem.temperOf and TONE[Rem.temperOf(npc)]
-    if tone and Rem.BARKS[category .. "_" .. tone] then
+    if alt and Rem.BARKS[alt] then
+        cat = alt
+        def = Rem.BARKS[cat]
+    elseif tone and Rem.BARKS[category .. "_" .. tone] then
+        -- tom pela personalidade, se houver a versao da fala
         cat = category .. "_" .. tone
         def = Rem.BARKS[cat]
     end
@@ -60,6 +71,6 @@ function Rem.bark(npc, category, force)
     end
     local key = prefix .. i
     npc.lastBarkKey = key
-    Rem.safe(function() npc.z:Say(getText(key)) end)
+    Rem.safe(function() Rem.speak(npc, getText(key)) end)
     return true
 end

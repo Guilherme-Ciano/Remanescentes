@@ -8,9 +8,11 @@ require "Remanescentes/Rem_Barks"
 require "Remanescentes/Rem_World"
 local Rem = Remanescentes
 
+-- Sobreviventes (e o zumbi mais perto) em volta do quadrado clicado.
 local function npcsNear(square)
     local found = {}
-    if not square then return found end
+    local zombie = nil
+    if not square then return found, nil end
     local cell = getCell()
     for dx = -1, 1 do
         for dy = -1, 1 do
@@ -18,13 +20,18 @@ local function npcsNear(square)
             if sq then
                 local objs = sq:getMovingObjects()
                 for i = 0, objs:size() - 1 do
-                    local npc = Rem.active[objs:get(i)]
-                    if npc then found[npc.key] = npc end
+                    local o = objs:get(i)
+                    local npc = Rem.active[o]
+                    if npc then
+                        found[npc.key] = npc
+                    elseif not zombie and instanceof(o, "IsoZombie") and not o:isDead() then
+                        zombie = o
+                    end
                 end
             end
         end
     end
-    return found
+    return found, zombie
 end
 
 -- ---------------------------------------------------------------- menu
@@ -37,12 +44,13 @@ local function onFillWorldMenu(playerNum, context, worldobjects, test)
     end
     if not square then return end
 
-    local near = npcsNear(square)
+    local near, zombie = npcsNear(square)
     -- Kahlua (a Lua do jogo) nao tem a funcao next()
     local hasNear = false
     for _ in pairs(near) do hasNear = true break end
     local debugMenu = Rem.cfg("DebugMenu", true)
-    if not hasNear and not debugMenu then return end
+    local playerOpts = Rem.playerOptions or {}
+    if not hasNear and not debugMenu and #playerOpts == 0 then return end
 
     local root = context:addOption(getText("ContextMenu_Rem_Title"), worldobjects, nil)
     local sub = ISContextMenu:getNew(context)
@@ -51,6 +59,34 @@ local function onFillWorldMenu(playerNum, context, worldobjects, test)
     if isClient() then
         sub:addOption(getText("ContextMenu_Rem_MPNotSupported"), nil, nil)
         return
+    end
+
+    -- opcoes do jogador (diario...)
+    for _, o in ipairs(playerOpts) do
+        local show = true
+        if o.condition then
+            local okc, res = pcall(o.condition)
+            show = okc and res == true
+        end
+        if show then
+            local fn = o.fn
+            sub:addOption(getText(o.labelKey), nil, function() fn(getPlayer()) end)
+        end
+    end
+
+    -- zumbi perto do clique (ex.: "Aliados: ataquem este!")
+    if zombie then
+        for _, o in ipairs(Rem.targetOptions or {}) do
+            local show = true
+            if o.condition then
+                local okc, res = pcall(o.condition, zombie)
+                show = okc and res == true
+            end
+            if show then
+                local fn = o.fn
+                sub:addOption(getText(o.labelKey), nil, function() fn(zombie, getPlayer()) end)
+            end
+        end
     end
 
     -- sobreviventes perto do clique (opcoes registradas, filtradas pela condicao)

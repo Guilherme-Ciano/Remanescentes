@@ -1,8 +1,8 @@
 {
-    "Sandbox_Remanescentes": "Remanescentes: Sobreviventes",
-    "Sandbox_RemanescentesMundo": "Remanescentes: Mundo",
-    "Sandbox_RemanescentesZumbis": "Remanescentes: Zumbis",
-    "Sandbox_RemanescentesTeste": "Remanescentes: Teste",
+    "Sandbox_Remanescentes": "Primeiros Dias: Sobreviventes",
+    "Sandbox_RemanescentesMundo": "Primeiros Dias: Mundo",
+    "Sandbox_RemanescentesZumbis": "Primeiros Dias: Zumbis",
+    "Sandbox_RemanescentesTeste": "Primeiros Dias: Teste",
     "Sandbox_Remanescentes_NPCDifficulty": "Dificuldade dos sobreviventes",
     "Sandbox_Remanescentes_NPCDifficulty_tooltip": "Quanto dano os sobreviventes fazem em você, quanto acertam os tiros e de quão longe te enxergam.",
     "Sandbox_Remanescentes_NPCDifficulty_option1": "Fácil",
@@ -64,5 +64,7 @@
     "Sandbox_Remanescentes_DebugMenu": "Ferramentas de teste no clique direito",
     "Sandbox_Remanescentes_DebugMenu_tooltip": "Mostra o submenu 'Ferramentas de teste' (criar sobreviventes, grupos, eventos, teleportar, simular tempo). Desligado para jogar normalmente.",
     "Sandbox_Remanescentes_Verbose": "Log detalhado",
-    "Sandbox_Remanescentes_Verbose_tooltip": "Escreve no console.txt o que os sobreviventes e grupos fazem (útil para reportar problemas)."
+    "Sandbox_Remanescentes_Verbose_tooltip": "Escreve no console.txt o que os sobreviventes e grupos fazem (útil para reportar problemas).",
+    "Sandbox_Remanescentes_NPCBaseWork": "Obras dos grupos (porcentagem)",
+    "Sandbox_Remanescentes_NPCBaseWork_tooltip": "Quanto os grupos de NPC trabalham nas próprias bases: tábuas, cerca, arame farpado, carros nas ruas. 0 desliga; 100 é o mesmo ritmo da sua base."
 }

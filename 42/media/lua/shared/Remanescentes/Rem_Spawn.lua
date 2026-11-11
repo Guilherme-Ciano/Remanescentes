@@ -315,8 +315,10 @@ function Rem.dismissAll()
     local people, groups = store.people, store.groups
     store.people = {}
     store.groups = {}
+    Rem.bulkRemove = true     -- (limpeza de teste: nao e noticia para o diario)
     for _, p in pairs(people) do Rem.emit("personRemoved", p) end
     for _, g in pairs(groups) do Rem.emit("groupRemoved", g) end
+    Rem.bulkRemove = nil
     -- seeded continua true: o mundo nao ressemeia na hora (so cresce pelo EveryDays)
     Rem.log("todas as pessoas e grupos removidos")
 end

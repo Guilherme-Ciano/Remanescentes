@@ -48,3 +48,50 @@ for _ in pairs(seen) do n = n + 1 end
 check(n >= 2, "a mesma resposta tem variacoes (" .. n .. ")")
 check(IA.text({ key = "IGUI_Rem_Talk_refuse", args = {} }):find("IGUI_Rem_Talk_refuse_%d"), "fala sem variacao escolhida e resolvida sozinha (nunca aparece a chave crua)")
 Rem.dismissAll()
+
+realPrint("142) Falas desenhadas sobre a cabeca (Say nao funciona em corpo de zumbi)")
+Rem.dismissAll(); T.clearZombies()
+local drawnText = {}
+function getCore() return { getScreenWidth = function() return 1920 end, getScreenHeight = function() return 1080 end,
+    getZoom = function() return 1 end } end
+function getTextManager() return { getFontHeight = function() return 14 end, MeasureStringX = function() return 50 end,
+    DrawStringCentre = function(_, font, x, y, text, r, g, b, a) table.insert(drawnText, { text = text, x = x, y = y, a = a, r = r }) end } end
+function isoToScreenX(_, x) return x * 10 end
+function isoToScreenY(_, x, y) return y * 10 end
+require "Remanescentes/Rem_SpeechUI"
+local SPUI = Rem.SpeechUI
+local p = T.player
+p.x, p.y = 35000, 35000
+local talker = Rem.spawn(35002, 35000, 0, { faction = "civis", mode = "stay" })
+local far = Rem.spawn(35100, 35000, 0, { faction = "civis", mode = "stay" })
+Rem.bark(talker, "hello", true)
+Rem.bark(far, "hello", true)
+check(talker.speech and #talker.speech >= 1 and talker.speech[#talker.speech].text:find("IGUI_Rem_Bark_hello"), "fala guardada para desenhar")
+T.fire("OnPreUIDraw")
+local mine, farDrawn, outline = 0, 0, 0
+for _, d in ipairs(drawnText) do
+    if d.text == talker.speech[#talker.speech].text and d.r ~= 0 then mine = mine + 1 end
+    if d.text == far.speech[1].text and math.abs(d.x - 351000) < 5 then farDrawn = farDrawn + 1 end
+    if d.r == 0 then outline = outline + 1 end
+end
+check(mine == 1 and outline >= 4, "desenhada sobre ele, com contorno")
+check(drawnText[#drawnText].y < 35000 * 10, "acima da cabeca (mais alto que os pes)")
+check(farDrawn == 0, "longe demais: nao desenha")
+Rem.speak(talker, "segunda")
+Rem.speak(talker, "terceira")
+check(#talker.speech == Rem.SPEECH.LINES and talker.speech[#talker.speech].text == "terceira", "no maximo " .. Rem.SPEECH.LINES .. " linhas, a mais nova embaixo")
+drawnText = {}
+T.fire("OnPreUIDraw")
+local ys = {}
+for _, d in ipairs(drawnText) do if d.r ~= 0 then ys[d.text] = d.y end end
+check(ys.terceira and ys.segunda and ys.terceira > ys.segunda, "a fala nova fica embaixo da anterior")
+T.clock = T.clock + Rem.SPEECH.MAX_MS + 100   -- so o relogio (sem tick: ele falaria de novo)
+check(#Rem.speechOf(talker) == 0, "a fala some depois de um tempo")
+drawnText = {}
+T.fire("OnPreUIDraw")
+check(#drawnText == 0, "nada mais desenhado")
+Rem.speak(talker, "x")
+local l = SPUI.linesFor(talker, talker.speech[1].untilMs - 100)
+check(l[1].a < 1 and l[1].a > 0, "desvanece no fim")
+check(SPUI.failures == 0, "nenhum erro ao desenhar")
+Rem.dismissAll()

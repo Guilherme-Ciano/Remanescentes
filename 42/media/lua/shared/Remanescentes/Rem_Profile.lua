@@ -85,7 +85,7 @@ P.ARMOR_BONUS = 1.25
 -- { min, max } de cada traco
 P.PERSONALITY = {
     aliados       = { agressividade = { 2, 6 }, confianca = { 6, 10 }, coragem = { 4, 8 }, ganancia = { 1, 4 }, lealdade = { 6, 10 } },
-    civis         = { agressividade = { 0, 3 }, confianca = { 4, 9 }, coragem = { 0, 4 }, ganancia = { 1, 5 }, lealdade = { 4, 9 } },
+    civis         = { agressividade = { 0, 4 }, confianca = { 4, 9 }, coragem = { 1, 8 }, ganancia = { 1, 5 }, lealdade = { 4, 9 } },
     sobreviventes = { agressividade = { 3, 6 }, confianca = { 1, 5 }, coragem = { 5, 9 }, ganancia = { 2, 6 }, lealdade = { 5, 9 } },
     saqueadores   = { agressividade = { 7, 10 }, confianca = { 0, 3 }, coragem = { 4, 9 }, ganancia = { 6, 10 }, lealdade = { 1, 5 } },
     seita         = { agressividade = { 3, 9 }, confianca = { 0, 3 }, coragem = { 6, 10 }, ganancia = { 1, 4 }, lealdade = { 8, 10 } },
@@ -157,7 +157,30 @@ function P.temperFor(faction, pers)
     if base == "cauteloso" and pers.agressividade >= 8 and pers.coragem >= 8 then
         return "agressivo"                                          -- esquentado
     end
+    if base == "medroso" and pers.coragem >= 6 then return "cauteloso" end   -- civil de fibra
     return base
+end
+
+-- ---------------------------------------------------------------- bolsos
+P.POCKET_COMMON = { "Base.Crackers", "Base.BeefJerky", "Base.TinnedBeans", "Base.WaterRationCan", "Base.Crisps",
+    "Base.CigarettePack", "Base.Matches", "Base.Candle", "Base.Bandage", "Base.Pills" }
+P.POCKET_BY_ARCH = {
+    medico = { "Base.Bandage", "Base.Disinfectant", "Base.Pills", "Base.Antibiotics" },
+    engenheiro = { "Base.Nails", "Base.Hammer", "Base.Matches" },
+    atirador = { "Base.Bullets9mmBox", "Base.ShotgunShellsBox" },
+    furtivo = { "Base.HandTorch", "Base.BeefJerky" },
+    brigao = { "Base.Whiskey", "Base.CigarettePack" },
+}
+P.POCKET_COUNT = { 1, 3 }
+
+function P.rollPockets(rec)
+    local out = {}
+    for _ = 1, ZombRand(P.POCKET_COUNT[1], P.POCKET_COUNT[2] + 1) do
+        table.insert(out, Rem.pick(P.POCKET_COMMON))
+    end
+    local extra = P.POCKET_BY_ARCH[rec.archetype or ""]
+    if extra then table.insert(out, Rem.pick(extra)) end
+    return out
 end
 
 -- ---------------------------------------------------------------- gerar a ficha
@@ -214,6 +237,9 @@ function Rem.buildProfile(rec, opts)
     rec.cansaco = rec.cansaco or 0
     rec.moral = rec.moral or (50 + ZombRand(30))
 
+    -- o que leva nos bolsos (da para trocar, pedir, ou tomar a forca)
+    if not rec.pockets then rec.pockets = P.rollPockets(rec) end
+
     rec.profile = true
     return rec
 end
@@ -247,6 +273,7 @@ end)
 -- Pessoas de saves antigos ganham ficha na primeira vez que aparecem.
 Rem.on("npcActivated", function(npc)
     if not npc.rec.profile then Rem.buildProfile(npc.rec, { outfit = true, item = true }) end
+    if not npc.rec.pockets then npc.rec.pockets = P.rollPockets(npc.rec) end   -- saves de antes da 0.12
 end)
 
 -- ---------------------------------------------------------------- facções novas

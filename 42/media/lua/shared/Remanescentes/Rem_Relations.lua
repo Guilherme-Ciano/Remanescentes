@@ -90,7 +90,7 @@ end)
 function REL.trade()
     local list = {}
     for _, g in pairs(Rem.getStore().groups) do
-        if g.activity == "home" and #g.members > 0 then table.insert(list, g) end
+        if g.activity == "home" and #g.members > 0 and not g.player then table.insert(list, g) end
     end
     table.sort(list, function(a, b) return a.id < b.id end)
     local traded = 0

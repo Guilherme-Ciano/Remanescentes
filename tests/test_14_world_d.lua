@@ -115,6 +115,8 @@ player.x, player.y = 25000, 25000
 T.tick(1600)
 for _, id in ipairs(gF.members) do local p = Rem.getPerson(id) if p then p.onScene = false end end
 EV.CFG.FALL_PERMILLE = 1000
+local escape0 = Rem.Refugees and Rem.Refugees.CFG.ESCAPE
+if Rem.Refugees then Rem.Refugees.CFG.ESCAPE = 0 end     -- (aqui ninguem escapa: Rem_Refugees testado no test_29)
 local ids = {}
 for _, id in ipairs(gF.members) do table.insert(ids, id) end
 local gid = gF.id
@@ -123,6 +125,7 @@ gF.supplies = 0   -- sem comida sobrando nao fortifica hoje: a chance de cair fi
 EV.daily()
 check(Rem.getStore().groups[gid] == nil, "a base caiu: o grupo acabou")
 check(#Rem.getStore().turned >= #ids, "os moradores viraram zumbis")
+if Rem.Refugees then Rem.Refugees.CFG.ESCAPE = escape0 end
 check(Rem.getStore().nests["22001"] ~= nil, "a casa virou um ninho")
 EV.CFG.FALL_PERMILLE = fall0
 local zb = 0

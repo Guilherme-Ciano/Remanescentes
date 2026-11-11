@@ -175,7 +175,9 @@ function T.newZombie(x, y, z, fx, fy)
     function o:dressInNamedOutfit(name) self.dressed = name; self.outfit = name; self.naked = false; T.nextPid = (T.nextPid or 5000) + 1; self.pid = T.nextPid end
     function o:getHumanVisual()
         local me = self
-        return { setSkinTextureName = function(_, n) me.skin = n end, removeBlood = function() end, removeDirt = function() end }
+        me.blood = me.blood or 0
+        return { setSkinTextureName = function(_, n) me.skin = n end, getSkinTexture = function() return me.skin end,
+            removeBlood = function() me.blood = 0 end, removeDirt = function() end, getTotalBlood = function() return me.blood end }
     end
     function o:getItemVisuals()
         local me = self
@@ -296,6 +298,13 @@ function T.square(x, y, z)
         end,
         getObjects = function() return T.JList(T.sqObjects[sqKey(x, y) .. "," .. tostring(z or 0)] or {}) end,
         AddTileObject = function(_, o) T.putObject(x, y, z or 0, o) end,
+        AddWorldInventoryItem = function(_, ft) T.dropItem(x, y, ft) return T.newItem(ft) end,
+        AddSpecialObject = function(_, o) T.putObject(x, y, z or 0, o) end,
+        RecalcAllWithNeighbours = function() end,
+        transmitRemoveItemFromSquare = function(_, o)
+            local list = T.sqObjects[sqKey(x, y) .. "," .. tostring(z or 0)] or {}
+            for i, w in ipairs(list) do if w == o then table.remove(list, i) break end end
+        end,
         getWorldObjects = function() return T.JList(T.worldItems[sqKey(x, y)] or {}) end,
         getDeadBodys = function() return T.JList(T.deadBodies[sqKey(x, y)] or {}) end,
         removeCorpse = function(_, b)
@@ -327,7 +336,10 @@ function getCell()
         end,
         getGridSquare = function(_, x, y, z) if not T.worldLoaded then return nil end return T.square(x, y, z) end,
         addLamppost = function(_, x, y, z) T.lights[x .. "," .. y .. "," .. z] = true end,
-        removeLamppost = function(_, x, y, z) T.lights[x .. "," .. y .. "," .. z] = nil end,
+        removeLamppost = function(_, x, y, z)   -- como no jogo: sem luz no lugar, lanca erro
+            if not T.lights[x .. "," .. y .. "," .. z] then error("IllegalStateException: lampostTotalR") end
+            T.lights[x .. "," .. y .. "," .. z] = nil
+        end,
     }
 end
 
@@ -342,6 +354,7 @@ IsoBarricade = {
         local b = { planks = 0 }
         function b:canAddPlank() return self.planks < 4 end
         function b:addPlank() self.planks = self.planks + 1 end
+        function b:getNumPlanks() return self.planks end
         obj.barricade, obj.barricadeOpposite = b, addOpposite
         return b
     end,
@@ -379,11 +392,21 @@ end
 
 -- objetos colocados pelo mod (placa, barril, gerador...)
 IsoObject = { new = function(sq, sprite) return { _class = "IsoObject", sprite = sprite } end }
-IsoThumpable = { new = function(cell, sq, sprite)
-    local o = { _class = "IsoThumpable", sprite = sprite }
+IsoThumpable = { new = function(cell, sq, sprite, north)
+    local o = { _class = "IsoThumpable", sprite = sprite, north = north, md = {} }
+    function o:getModData() return self.md end
+    function o:setMaxHealth(v) self.maxHealth = v end
+    function o:setHealth(v) self.health = v end
+    function o:removeFromSquare() self.removed = true end
     setmetatable(o, { __index = function() return function() end end })
     return o
 end }
+T.vehicles = {}
+function addVehicleDebug(script, dir, skin, sq)
+    local v = { script = script, dir = dir, x = sq:getX(), y = sq:getY() }
+    table.insert(T.vehicles, v)
+    return v
+end
 SpriteConfigManager = { getObjectInfoFromSprite = function() return nil end }
 GameEntityFactory = { CreateIsoObjectEntity = function() end }
 T.generators = {}

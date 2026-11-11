@@ -25,13 +25,17 @@ local P = Rem.module("Perception", {
     BITE_RANGE = 0.9,
     BITE_COOLDOWN_MS = 1500,
     ZATTACK_ANIM_MS = 700,
-    HUNT_MEMORY_MS = 12000,
+    HUNT_MEMORY_MS = 20000,
+    FOV_DOT = -0.5,               -- zumbi percebe quem esta ate um pouco atras do ombro
+    ATTRACT_MAX = 14,             -- barulho de sobrevivente chama zumbis livres ate essa distancia
+    ATTRACT_CHANCE = 70,          -- (%) de cada zumbi livre no alcance vir atras de quem fez o barulho
     HUNT_GIVEUP_DIST = 30,
     REPATH_MS = 1000,
     HIT_REACT_MS = 450,
-    -- zumbi atras do jogador troca para um sobrevivente se ele estiver bem mais perto
-    DISTRACT_DIST = 3.0,          -- sobrevivente no maximo a isso do zumbi
-    DISTRACT_MARGIN = 2.0,        -- e pelo menos isso mais perto que o jogador
+    -- zumbi atras do jogador troca para um sobrevivente que esteja mais perto dele: para o
+    -- zumbi, voce e os sobreviventes sao a mesma coisa (carne)
+    DISTRACT_DIST = 8.0,          -- sobrevivente no maximo a isso do zumbi
+    DISTRACT_RATIO = 0.75,        -- e a menos que essa fracao da distancia ate o jogador
     DISTRACT_COOLDOWN_MS = 4000,  -- depois de voltar ao jogador, nao troca de novo por um tempo
 })
 
@@ -80,7 +84,7 @@ function Rem.zombieNotices(zombie, npc, d)
     local range = Rem.sightRange(npc)
     if d > range then return false end
     local close = d < (npc.sneaking and 1.2 or 2.0)
-    if not close and not Rem.isFacing(zombie, npc.z, -0.1) then return false end
+    if not close and not Rem.isFacing(zombie, npc.z, P.CFG.FOV_DOT) then return false end
     local ok, sees = pcall(function() return zombie:CanSee(npc.z) end)
     if ok and sees == false then return false end
     local chance = 1 - (d / range)
@@ -155,6 +159,30 @@ function Rem.makeNoise(npc, radius)
     Rem.safe(function()
         addSound(z, math.floor(z:getX()), math.floor(z:getY()), math.floor(z:getZ()), radius, radius)
     end)
+    Rem.safe(P.attract, npc, radius)
+end
+
+-- Barulho de sobrevivente (golpe, tiro, corrida, grito): zumbis livres por perto vem atras
+-- DELE, nao so "ate o lugar do som". Sem isso os zumbis so ligavam para o jogador.
+function P.attract(npc, radius)
+    local z = npc.z
+    local r = math.min(radius, P.CFG.ATTRACT_MAX)
+    if r < 2 then return 0 end
+    local now = Rem.nowMs()
+    local n = 0
+    local list = Rem.zombiesNear(z:getX(), z:getY(), r)
+    for i = 1, #list do
+        local other = list[i]
+        if other ~= z and not Rem.active[other] and not Rem.hunting[other] and not other:isDead()
+            and other:getTarget() == nil and math.floor(other:getZ()) == math.floor(z:getZ())
+            and ZombRand(100) < P.CFG.ATTRACT_CHANCE then
+            local h = Rem.startHunt(other, npc, now)
+            h.nextPath = now + P.CFG.REPATH_MS
+            other:pathToCharacter(z)
+            n = n + 1
+        end
+    end
+    return n
 end
 
 -- ---------------------------------------------------------------- reacao ao golpe
@@ -237,7 +265,7 @@ function Rem.distractedBy(zombie, npc, d, now)
     local target = zombie:getTarget()
     if not target or not instanceof(target, "IsoPlayer") then return false end
     if now - (backToPlayerAt[zombie] or -P.CFG.DISTRACT_COOLDOWN_MS) < P.CFG.DISTRACT_COOLDOWN_MS then return false end
-    return d + P.CFG.DISTRACT_MARGIN <= Rem.dist(zombie, target)
+    return d <= Rem.dist(zombie, target) * P.CFG.DISTRACT_RATIO
 end
 
 -- ---------------------------------------------------------------- por sobrevivente

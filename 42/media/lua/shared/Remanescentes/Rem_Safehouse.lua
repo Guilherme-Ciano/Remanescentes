@@ -203,7 +203,9 @@ function Rem.fortifyHome(g)
     local h = g.home
     local res = { windows = 0, doors = 0, locked = 0 }
     if not hasRect(h) then return res end
-    local frac = S.FORTIFY[g.faction] or 0.5
+    -- primeiros dias: as casas ainda nao estao fechadas; o resto os moradores pregam aos
+    -- poucos, na sua frente (Rem_Director)
+    local frac = (S.FORTIFY[g.faction] or 0.5) * (Rem.Director and Rem.Director.initialFortify() or 1)
     local extraPlank = 0
     if hasEngineer(g) then
         frac = math.min(1, frac + S.ENGINEER_BONUS)
@@ -580,11 +582,12 @@ function S.updateLights(player)
         local want = night and h and h.fortified and h.x1 and groupHome(g)
             and Rem.dist2(px, py, h.x, h.y) < S.CFG.PREPARE_RADIUS
         local cur = S.lights[gid]
+        -- (nao remover antes de criar: removeLamppost sem luz no lugar lanca IllegalStateException)
         if want and not cur then
             local z = h.z or 0
             local x, y = math.floor(h.x), math.floor(h.y)
             local sq = getCell():getGridSquare(x, y, z)
-            if sq and try(function() getCell():removeLamppost(x, y, z); getCell():addLamppost(x, y, z, 1.0, 0.8, 0.55, 7) return true end) then
+            if sq and try(function() getCell():addLamppost(x, y, z, 1.0, 0.8, 0.55, 7) return true end) then
                 S.lights[gid] = { x = x, y = y, z = z }
             end
         elseif cur and not want then

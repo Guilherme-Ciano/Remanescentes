@@ -45,26 +45,65 @@ end
 
 local function isHomeOfGroup(bid)
     for _, g in pairs(Rem.getStore().groups) do
-        if g.home and g.home.bid == bid then return true end
+        if g.home and g.home.bid == bid then return true end   -- (inclui a sua base)
     end
     return false
 end
 
 -- Sorteia um predio a [minD, maxD] de (x, y). filter(def, bid) opcional.
-function Rem.pickBuilding(x, y, minD, maxD, filter)
+-- Indice dos predios por celulas de BUCKET tiles (feito uma vez; refeito se a lista mudar).
+-- Antes, pickBuilding sorteava 300 vezes entre TODOS os predios do mapa (milhares): perto
+-- de um ponto quase nunca acertava, e grupos e coletores ficavam sem destino.
+local BUCKET = 100
+local bIndex, bIndexSize = nil, -1
+
+local function buildingIndex()
     local list = buildings()
     local n = list:size()
-    if n == 0 then return nil end
-    for _ = 1, 300 do
-        local def = list:get(ZombRand(n))
+    if bIndex and bIndexSize == n then return bIndex end
+    bIndex, bIndexSize = {}, n
+    for i = 0, n - 1 do
+        local def = list:get(i)
         local bx, by = buildingCenter(def)
-        local d = Rem.dist2(x, y, bx, by)
-        local area = def:getW() * def:getH()
-        if d >= minD and d <= maxD and area >= 30 and area <= 2500 then
-            local bid = bidOf(def)
-            if not filter or filter(def, bid, bx, by) then
-                return def, bx, by, bid
+        local k = math.floor(bx / BUCKET) * 100000 + math.floor(by / BUCKET)
+        local cell = bIndex[k]
+        if not cell then cell = {} bIndex[k] = cell end
+        table.insert(cell, def)
+    end
+    return bIndex
+end
+
+-- (testes: predios criados depois)
+function Rem.resetBuildingIndex() bIndex, bIndexSize = nil, -1 end
+
+-- Sorteia um predio a [minD, maxD] de (x, y). filter(def, bid, bx, by) opcional.
+function Rem.pickBuilding(x, y, minD, maxD, filter)
+    local index = buildingIndex()
+    local cand = {}
+    local c0x, c1x = math.floor((x - maxD) / BUCKET), math.floor((x + maxD) / BUCKET)
+    local c0y, c1y = math.floor((y - maxD) / BUCKET), math.floor((y + maxD) / BUCKET)
+    for cx = c0x, c1x do
+        for cy = c0y, c1y do
+            for _, def in ipairs(index[cx * 100000 + cy] or {}) do
+                local bx, by = buildingCenter(def)
+                local d = Rem.dist2(x, y, bx, by)
+                local area = def:getW() * def:getH()
+                if d >= minD and d <= maxD and area >= 30 and area <= 2500 then
+                    table.insert(cand, def)
+                end
             end
+        end
+    end
+    -- ordem aleatoria (o mesmo sorteio de antes, mas so entre os que estao no raio)
+    for i = #cand, 2, -1 do
+        local j = ZombRand(i) + 1
+        cand[i], cand[j] = cand[j], cand[i]
+    end
+    for _, def in ipairs(cand) do
+        local bx, by = buildingCenter(def)
+        local bid = bidOf(def)
+        if not filter or filter(def, bid, bx, by) then
+            return def, bx, by, bid
         end
     end
     return nil
@@ -299,6 +338,9 @@ local function chooseScavengeTarget(g)
     return true
 end
 
+-- (Rem_Director decide quando a comida ou o material acabam)
+W.startScavenge = function(g) return chooseScavengeTarget(g) end
+
 -- Alvo de ataque: grupo inimigo (relacao ruim, Rem_Relations; sem esse modulo, faccao
 -- hostil). punitive = milicia atacando saqueadores.
 local function isEnemy(g, other)
@@ -310,7 +352,8 @@ local function chooseRaidTarget(g, punitive)
     if g.faction == "saqueadores" and Rem.Timeline.raiderFactor() <= 0 then return false end   -- ainda nao se organizaram
     local best, bestD = nil, 250
     for _, other in pairs(Rem.getStore().groups) do
-        if other ~= g and other.home and isEnemy(g, other) and (not punitive or other.faction == "saqueadores") then
+        if other ~= g and other.home and isEnemy(g, other) and (not punitive or other.faction == "saqueadores")
+            and not (other.player and Rem.Diplomacy and Rem.Diplomacy.protectedFrom(g)) then
             local d = Rem.dist2(g.home.x, g.home.y, other.home.x, other.home.y)
             if d < bestD then best, bestD = other, d end
         end
@@ -356,6 +399,8 @@ local function resolveRaid(g, members)
         local vMembers = membersOf(victim)
         local attack = #members + ZombRandFloat(0, 2)
         local defend = #vMembers + ZombRandFloat(0, 2) + 0.5 -- defender a casa ajuda
+        if victim.player and Rem.PlayerBase then defend = defend + Rem.PlayerBase.defenseBonus(victim) end   -- guardas e janelas
+        if Rem.BaseBuild and not victim.player then defend = defend + Rem.BaseBuild.structureBonus(victim) end   -- cerca, arame, carros
         if Rem.allyHelp then defend = defend + Rem.allyHelp(victim) end   -- aliados por perto (D4)
         local loser, loserMembers, winner = victim, vMembers, g
         if defend > attack then loser, loserMembers, winner = g, members, victim end
@@ -366,8 +411,9 @@ local function resolveRaid(g, members)
         winner.supplies = winner.supplies + stolen
         Rem.debug("ataque: grupo " .. g.id .. " x " .. victim.id .. " -> venceu " .. winner.id)
         Rem.emit("raidResolved", g, victim, winner)
-        -- (D3) atacantes acabaram com o grupo: tomam a base dele (fortificacoes e estoque)
-        if winner == g and #membersOf(victim) == 0 and victim.home and victim.home.x1 then
+        -- (D3) atacantes acabaram com o grupo: tomam a base dele (fortificacoes e estoque).
+        -- A sua base nao e tomada: fica vazia, e voce pode voltar a ocupa-la.
+        if winner == g and #membersOf(victim) == 0 and victim.home and victim.home.x1 and not victim.player then
             g.oldHome = g.home
             g.home = victim.home
             Rem.debug("grupo " .. g.id .. " (" .. g.faction .. ") tomou a base do grupo " .. victim.id)
@@ -452,7 +498,8 @@ function Rem.simulateWorld(hours)
         local hour = Rem.worldHours()
         local empty = {}
         for id, g in pairs(store.groups) do
-            local ok, res = pcall(Rem.simulateGroup, g, hour)
+            local ok, res = true, nil
+            if not g.player then ok, res = pcall(Rem.simulateGroup, g, hour) end   -- (base do jogador: Rem_PlayerBase)
             if not ok then Rem.log("ERRO simulando grupo " .. id .. ": " .. tostring(res))
             elseif res == "empty" then table.insert(empty, id) end
         end
@@ -536,7 +583,9 @@ function Rem.reseedWorld(player)
     local groups = {}
     for _, g in pairs(store.groups) do table.insert(groups, g) end
     store.groups = {}
+    Rem.bulkRemove = true
     for _, g in ipairs(groups) do Rem.emit("groupRemoved", g) end
+    Rem.bulkRemove = nil
     store.seeded = false
     store.regions = {}
     Rem.seedWorld(player)

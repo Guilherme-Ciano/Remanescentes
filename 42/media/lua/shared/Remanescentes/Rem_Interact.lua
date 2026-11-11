@@ -35,7 +35,8 @@ local IA = Rem.module("Interact", {
     TRADE_REP = 2,
     SHELTER_REP = 50,
     SHELTER_HOURS = 72,
-    JOIN_THRESHOLD = 60,
+    JOIN_THRESHOLD = 95,      -- (0.12: era 60; quase todo mundo aceitava na primeira conversa)
+    MAX_FOLLOWERS = 4,        -- quantos aliados seguem voce ao mesmo tempo
     JOIN_COOLDOWN_HOURS = 24,
     QUEST_REP = 15,
     QUEST_HOURS = 72,
@@ -49,10 +50,23 @@ local IA = Rem.module("Interact", {
     LOOT_PRIORITY = 110,
     GUARD_PRIORITY = 120,
     GIVE_DIST = 2.5,
+    LOOT_MAX_MS = 150000,     -- seguidor saqueando: tempo maximo antes de voltar com o que achou
+    LOOT_LEASH = 45,          -- voce se afastou isso: ele larga e volta
+    GIFT_HOURS = 6,           -- um presente por pessoa a cada tantas horas
+    GIFT_REP = 2,
+    GIFT_BOND = { 4, 15 },    -- vinculo ganho: minimo e maximo (cresce com o valor do item)
+    JOIN_BOND_WEIGHT = 1.5,   -- o que mais pesa: o que voce fez por ESTA pessoa
+    ASK_BOND = 25,            -- vinculo para ele te dar algo quando voce pede
+    ASK_REP = 50,             -- (ou reputacao alta com o grupo)
+    ASK_HOURS = 24,
+    ASK_COST = 5,             -- pedir gasta um pouco da boa vontade
+    ASK_HURT_BELOW = 70,      -- sua saude abaixo disso: ele te da remedio; senao, comida
+    MATERIALS_QUEST_BELOW = 4,
 })
 local CFG = IA.CFG
 
 Rem.BARKS.deal = { urgent = true, n = 3, cd = 0 }
+Rem.BARKS.loot_nothing = { urgent = true, n = 2, cd = 0 }
 
 -- ---------------------------------------------------------------- utilidades
 local function groupOf(npc) return npc.rec.groupId and Rem.getStore().groups[npc.rec.groupId] end
@@ -84,10 +98,19 @@ IA.VARIANTS = {
     IGUI_Rem_Join_yes = 3, IGUI_Rem_Join_no = 3, IGUI_Rem_Join_no_cold = 2, IGUI_Rem_Join_group = 3,
     IGUI_Rem_Threat_comply = 3, IGUI_Rem_Threat_fight = 3, IGUI_Rem_Threat_unarmed = 2,
     IGUI_Rem_Quest_reward_item = 3, IGUI_Rem_Quest_reward_info = 2, IGUI_Rem_Quest_lost_found = 3,
+    IGUI_Rem_Gift_thanks = 3, IGUI_Rem_Gift_thanks_cold = 2, IGUI_Rem_Gift_thanks_scared = 2,
+    IGUI_Rem_Gift_none = 2, IGUI_Rem_Gift_enough = 2,
+    IGUI_Rem_About_refuse = 3,
+    IGUI_Rem_Goal_hide = 2, IGUI_Rem_Goal_clear = 2, IGUI_Rem_Goal_scavenge = 2,
+    IGUI_Rem_Goal_fortify = 2, IGUI_Rem_Goal_materials = 2,
+    IGUI_Rem_Ask_yes = 2, IGUI_Rem_Ask_no = 2,
+    IGUI_Rem_Talk_hi_grudge = 3, IGUI_Rem_Talk_hi_saved = 3, IGUI_Rem_Talk_hi_gift = 2, IGUI_Rem_Talk_hi_quest = 2,
+    IGUI_Rem_Talk_hi_traded = 2, IGUI_Rem_Talk_hi_close = 3,
 }
 IA.TONED = {
     IGUI_Rem_Talk_need_none = true, IGUI_Rem_Talk_info_distrust = true, IGUI_Rem_Talk_bye = true,
     IGUI_Rem_Trade_done = true, IGUI_Rem_Trade_unfair = true, IGUI_Rem_Shelter_no = true, IGUI_Rem_Join_no = true,
+    IGUI_Rem_Gift_thanks = true,
 }
 
 function IA.tone(npc)
@@ -139,7 +162,10 @@ end
 function IA.greeting(npc)
     local rec = npc.rec
     local att = rec.attitude or (Rem.attitudeOf and Rem.attitudeOf(rec)) or "neutro"
-    local l
+    local l = (not rec.surrendered) and Rem.Bonds and Rem.Bonds.greeting(npc) or nil   -- lembra de voce
+    if l then return IA.finalize(l, npc) end
+    l = (not rec.surrendered) and Rem.Fame and Rem.Fame.greeting(npc) or nil         -- ja ouviu falar de voce
+    if l then return IA.finalize(l, npc) end
     if rec.surrendered then l = line("IGUI_Rem_Talk_hi_surrendered")
     elseif rec.faction == "aliados" then l = line("IGUI_Rem_Talk_hi_ally", tostring(rec.name))
     elseif Rem.trait(rec, "coragem") <= 3 then l = line("IGUI_Rem_Talk_hi_scared", tostring(rec.name))
@@ -161,11 +187,47 @@ function IA.needs(npc)
         if frac < 0.6 or p.infectedAt then needs.medical = true end
         if p.firearm and (p.ammo or 0) < 6 then needs.ammo = true end
     end
+    -- economia da regiao: escassez, guerra, gosto da faccao (Rem_Territory)
+    if Rem.Territory and g then needs.mods = Rem.Territory.priceMods(g) end
     return needs
 end
 
 function IA.status(npc)
+    -- preso; quem segue voce com fome ou cansado (Rem_Needs) fala disso primeiro
+    if npc.rec.prisoner then return line("IGUI_Rem_Prisoner_status") end
+    local mil = Rem.Military and Rem.Military.status(npc)        -- soldado: noticias oficiais
+    if mil then return mil end
+    local ND = Rem.Needs
+    if ND and ND.tracked(npc.rec) and not npc.rec.groupId then
+        if ND.hunger(npc.rec) >= ND.CFG.ASK_FOOD_AT then return line("IGUI_Rem_Needs_status_hungry") end
+        if ND.tired(npc.rec) >= ND.CFG.ASK_SLEEP_AT then return line("IGUI_Rem_Needs_status_tired") end
+    end
+    -- grupo em guerra (Rem_War) fala disso primeiro
+    local war = Rem.War and Rem.War.status(npc)
+    if war then return war end
+    -- o que o grupo esta fazendo agora (Rem_Director) vem antes do que falta
+    local g = groupOf(npc)
     local n = IA.needs(npc)
+    if g and Rem.Director and g.home and g.home.x1 and not npc.rec.lost and not n.medical then
+        local goal = g.goal
+        if not goal then goal = Rem.Director.choose(g, nil) end
+        if goal == "scavenge" and g.needs and g.needs.food < Rem.Director.CFG.FOOD_URGENT
+            and Rem.Director.materials(g) < 1 and g.activity == "home" then
+            return line("IGUI_Rem_Goal_materials")
+        end
+        if goal and goal ~= "routine" and goal ~= "heal" and goal ~= "fortify" then return line("IGUI_Rem_Goal_" .. goal) end
+        -- obra em andamento (Rem_BaseBuild): "Estamos levantando uma cerca em volta da casa."
+        local BB = Rem.BaseBuild
+        if BB and g.home.plan then
+            for _, p in ipairs(BB.projectsFor(g)) do
+                if (g.home.plan[p] or 0) > 0 then
+                    if Rem.Director.materials(g) < (BB.CFG.COST[p] or 1) then return line("IGUI_Rem_Goal_materials") end
+                    return line("IGUI_Rem_Goal_build", getText("IGUI_Rem_Project_" .. p))
+                end
+            end
+        end
+        if goal == "fortify" then return line("IGUI_Rem_Goal_fortify") end
+    end
     if n.medical then return line("IGUI_Rem_Talk_need_medical") end
     if n.food then return line("IGUI_Rem_Talk_need_food") end
     if n.ammo then return line("IGUI_Rem_Talk_need_ammo") end
@@ -175,8 +237,11 @@ end
 local DIRS = { "E", "SE", "S", "SW", "W", "NW", "N", "NE" }
 function IA.direction(fx, fy, tx, ty)
     local a = math.atan2(ty - fy, tx - fx)          -- y cresce para o sul no PZ
-    local i = math.floor((a / (math.pi / 4)) + 0.5) % 8
-    return DIRS[i + 1]
+    -- (na Lua do jogo, -1 % 8 da -1, nao 7: normaliza a mao)
+    local i = math.floor((a / (math.pi / 4)) + 0.5)
+    while i < 0 do i = i + 8 end
+    while i >= 8 do i = i - 8 end
+    return DIRS[i + 1] or "N"
 end
 
 -- Conta onde fica outro grupo que voce ainda nao conhece.
@@ -226,11 +291,13 @@ function IA.value(item, needs)
         if needs.food and (cat == "Food" or cat == "Water") then v = v * 1.8 end
         if needs.medical and cat == "FirstAid" then v = v * 2 end
         if needs.ammo and cat == "Ammo" then v = v * 1.8 end
+        if needs.mods and needs.mods[cat] then v = v * needs.mods[cat] end
     end
     return v
 end
 
 function IA.markup(npc)
+    if Rem.Alliance and Rem.Alliance.isAllied(groupOf(npc)) then return 1.0 end   -- aliados: preco justo
     local rep = Rem.repOf and Rem.repOf(npc.rec) or 0
     return math.max(1.0, CFG.MARKUP - rep / CFG.MARKUP_REP_DIVISOR)
 end
@@ -241,7 +308,9 @@ local function carriedItem(ft)
     return it
 end
 
--- O que o grupo oferece: estoque da casa (se perto e carregado) ou o que a pessoa carrega.
+-- O que a pessoa tem para oferecer: o estoque da casa (se ela esta perto e a casa esta
+-- carregada), mais o que ela carrega (saque, rec.carry) e o que tem nos bolsos
+-- (rec.pockets, Rem_Profile). Cada entrada: { item, container } ou { item, src, idx }.
 function IA.theirItems(npc)
     local out = {}
     local g = groupOf(npc)
@@ -251,13 +320,38 @@ function IA.theirItems(npc)
             local items = c:getItems()
             for i = 0, items:size() - 1 do table.insert(out, { item = items:get(i), container = c }) end
         end
-    else
-        for i, ft in ipairs(npc.rec.carry or {}) do
+    end
+    for _, src in ipairs({ "carry", "pockets" }) do
+        for i, ft in ipairs(npc.rec[src] or {}) do
             local it = carriedItem(ft)
-            if it then table.insert(out, { item = it, carryIndex = i }) end
+            if it then table.insert(out, { item = it, src = src, idx = i, carryIndex = (src == "carry") and i or nil }) end
         end
     end
     return out
+end
+
+-- Passa itens dele para voce (entradas de IA.theirItems). Retorna quantos sairam do
+-- estoque da casa (para as contas do estoque).
+function IA.takeFromNpc(npc, entries, player)
+    local inv = player:getInventory()
+    local gone = { carry = {}, pockets = {} }
+    local fromStash = 0
+    for _, e in ipairs(entries) do
+        if e.container then
+            e.container:DoRemoveItem(e.item)
+            inv:AddItem(e.item)
+            fromStash = fromStash + 1
+        elseif e.src then
+            gone[e.src][e.idx] = true
+            inv:AddItem(e.item:getFullType())
+        end
+    end
+    for _, src in ipairs({ "carry", "pockets" }) do
+        local keep = {}
+        for i, ft in ipairs(npc.rec[src] or {}) do if not gone[src][i] then table.insert(keep, ft) end end
+        if npc.rec[src] then npc.rec[src] = keep end
+    end
+    return fromStash
 end
 
 -- O que voce pode oferecer: inventario principal, sem itens equipados nem favoritos.
@@ -301,28 +395,17 @@ function IA.trade(player, npc, give, take)
         end
     end
     -- voce recebe
-    local removeCarry = {}
-    for _, e in ipairs(take) do
-        if e.container then
-            e.container:DoRemoveItem(e.item)
-            inv:AddItem(e.item)
-        elseif e.carryIndex then
-            removeCarry[e.carryIndex] = true
-            inv:AddItem(e.item:getFullType())
-        end
-    end
-    local keep = {}
-    for i, ft in ipairs(npc.rec.carry or {}) do if not removeCarry[i] then table.insert(keep, ft) end end
-    npc.rec.carry = keep
+    local fromStash = IA.takeFromNpc(npc, take, player)
     -- contas do estoque (o resto do mod nao confunde troca com consumo/roubo)
     if g and g.home and conts and #conts > 0 then
-        local delta = #give - #take
+        local delta = #give - fromStash
         g.home.syncCount = math.max(0, (g.home.syncCount or 0) + delta)
         g.home.stashCount = math.max(0, (g.home.stashCount or 0) + delta)
         g.supplies = math.max(0, (g.supplies or 0) + delta / Rem.World.CFG.ITEMS_PER_SUPPLY)
     end
     if Rem.changeRep then Rem.changeRep(npc.rec.groupId or ("f:" .. npc.rec.faction), CFG.TRADE_REP, "troca") end
     if g then g.tradedAt = Rem.worldHours() end
+    Rem.emit("playerDeed", "traded", npc)
     Rem.bark(npc, "deal", true)
     return true, line("IGUI_Rem_Trade_done")
 end
@@ -348,14 +431,31 @@ function IA.askShelter(npc)
 end
 
 -- ---------------------------------------------------------------- E4 recrutar
+-- Disposicao de largar tudo e seguir voce (>= JOIN_THRESHOLD aceita). Ninguem segue um
+-- estranho: pesa principalmente o vinculo pessoal; depois a personalidade e a fama.
+--   sozinho no mundo (de passagem, errante, sem grupo)  +15
+--   voce acabou de liberta-lo                           +25
+--   tem casa e grupo                                    -25 (e -30 se o grupo ficaria com 1-2)
 function IA.joinScore(npc)
     local rec = npc.rec
-    local score = Rem.trait(rec, "lealdade") * 8 + (Rem.repOf(rec) or 0) * 0.5
+    local score = Rem.trait(rec, "lealdade") * 4 + Rem.trait(rec, "confianca") * 2
+        + (Rem.repOf(rec) or 0) * 0.4 + (rec.bond or 0) * CFG.JOIN_BOND_WEIGHT
     local g = groupOf(npc)
-    if not g or rec.transient or rec.faction == "errantes" then score = score + 20 end
+    if not g or rec.transient or rec.faction == "errantes" then score = score + 15 end
+    if rec.ambient == "freed" then score = score + 25 end
+    if g and g.home then score = score - 25 end
     if g and #g.members <= 2 then score = score - 30 end
     if rec.surrendered then score = score - 20 end
     return score
+end
+
+-- Quem anda com voce (aliados que nao moram na sua base).
+function IA.followerCount()
+    local n = 0
+    for _, p in pairs(Rem.getStore().people) do
+        if p.faction == "aliados" and not p.groupId then n = n + 1 end
+    end
+    return n
 end
 
 function IA.recruit(npc)
@@ -375,6 +475,7 @@ function IA.recruit(npc)
     Rem.clearRest(npc)
     Rem.applyFriendlyFire(npc)
     Rem.bark(npc, "follow", true)
+    Rem.emit("playerDeed", "recruited", npc)
 end
 
 function IA.askJoin(npc)
@@ -386,6 +487,10 @@ function IA.askJoin(npc)
     end
     rec.askedJoinAt = hours
     if Rem.isHostileToPlayer(npc) and not rec.surrendered then return false, line("IGUI_Rem_Talk_refuse") end
+    if IA.followerCount() >= CFG.MAX_FOLLOWERS then
+        rec.askedJoinAt = nil
+        return false, line("IGUI_Rem_Join_full")
+    end
     if IA.joinScore(npc) >= CFG.JOIN_THRESHOLD then
         IA.recruit(npc)
         return true, line("IGUI_Rem_Join_yes")
@@ -417,8 +522,8 @@ function IA.lootHere(npc, sq)
     rec.mode = "loot"
     rec.lootTarget = { x = def:getX() + def:getW() / 2, y = def:getY() + def:getH() / 2, z = 0, bid = tostring(def:getID()),
         x1 = def:getX(), y1 = def:getY(), x2 = def:getX() + def:getW(), y2 = def:getY() + def:getH() }
-    npc.lootDoneBid = nil
-    Rem.bark(npc, "loot_found")
+    npc.lootDoneBid, npc.lootStart, npc.fLootCont, npc.lootUntil = nil, nil, nil, nil
+    Rem.clearRest(npc)
     return true, line("IGUI_Rem_Loot_ok")
 end
 
@@ -427,36 +532,46 @@ function IA.lootBehavior(npc, ctx, now)
     if rec.mode ~= "loot" or not rec.lootTarget then return false end
     local t = rec.lootTarget
     local SC = Rem.Scavenge
+    local player = ctx.player
+    npc.lootStart = npc.lootStart or now
     local full = rec.carry and #rec.carry >= SC.CFG.CARRY_MAX
-    if full or npc.lootDoneBid == t.bid then
+    local tooLong = now - npc.lootStart > CFG.LOOT_MAX_MS
+    local tooFar = player and Rem.dist(npc.z, player) > CFG.LOOT_LEASH
+    if full or tooLong or tooFar or npc.lootDoneBid == t.bid then
         -- volta e entrega
-        local player = ctx.player
         if not player then return false end
         if Rem.dist(npc.z, player) > CFG.GIVE_DIST then
             Rem.moveTo(npc, player:getX(), player:getY(), player:getZ(), now, Rem.travelGait(npc, Rem.dist(npc.z, player)))
             return true
         end
-        IA.giveCarry(npc, player)
+        if IA.giveCarry(npc, player) == 0 then Rem.bark(npc, "loot_nothing", true) end
         rec.mode, rec.lootTarget = "follow", nil
-        return true
-    end
-    local d = Rem.dist2(npc.z:getX(), npc.z:getY(), t.x, t.y)
-    if d > SC.CFG.NEAR_TARGET then
-        Rem.moveTo(npc, t.x, t.y, 0, now, Rem.travelGait(npc, d))
+        npc.lootStart, npc.fLootCont, npc.lootUntil, npc.lootDoneBid = nil, nil, nil, nil
         return true
     end
     local cur = npc.fLootCont      -- armario atual (o predio fica em rec.lootTarget)
     if not cur then
         cur = SC.pickContainer(npc, t)
         if not cur then npc.lootDoneBid = t.bid return true end
+        cur.since = now
         npc.fLootCont = cur
     end
     local cx, cy = cur.sq:getX() + 0.5, cur.sq:getY() + 0.5
     if Rem.dist2(npc.z:getX(), npc.z:getY(), cx, cy) > SC.CFG.TOUCH then
-        Rem.moveTo(npc, cx, cy, cur.sq:getZ(), now, Rem.baseGait(npc))
+        if now - (cur.since or now) > SC.CFG.STUCK_MS then      -- nao consegue chegar: proximo
+            t.visited = t.visited or {}
+            t.visited[cur.key] = true
+            npc.fLootCont, npc.lootUntil = nil, nil
+            return true
+        end
+        -- armario fica num quadrado solido: vai ate o quadrado livre ao lado
+        local sx, sy, sz = Rem.standSquare(cur.sq, npc.z:getX(), npc.z:getY())
+        local d = Rem.dist2(npc.z:getX(), npc.z:getY(), sx, sy)
+        Rem.moveTo(npc, sx, sy, sz, now, (d > 8) and Rem.travelGait(npc, d) or Rem.baseGait(npc))
         return true
     end
     Rem.stopMoving(npc)
+    Rem.safe(function() npc.z:faceLocationF(cx, cy) end)
     if not npc.lootUntil then npc.lootUntil = now + SC.CFG.SEARCH_MS return true end
     if now < npc.lootUntil then return true end
     Rem.safe(SC.takeFrom, npc, cur.c)
@@ -480,6 +595,7 @@ end
 -- Seguidor: liberar (vai embora, vira gente de passagem).
 function IA.release(npc, player)
     local rec = npc.rec
+    if Rem.PlayerBase then Rem.PlayerBase.leave(rec) end
     rec.faction = "civis"
     rec.recruited = nil
     rec.mode = "ambient"
@@ -514,6 +630,8 @@ IA.FETCH = {
     food = { cats = { Food = true, Water = true }, count = 4 },
     medical = { cats = { FirstAid = true }, count = 2 },
     ammo = { cats = { Ammo = true }, count = 1 },
+    -- tabuas e pregos para fechar as janelas (Rem_Director)
+    materials = { cats = {}, types = { ["Base.Plank"] = true, ["Base.Nails"] = true, ["Base.NailsBox"] = true }, count = 4 },
 }
 
 -- Cria uma missao conforme a necessidade do grupo.
@@ -527,6 +645,9 @@ function IA.offerQuest(npc)
     if needs.medical then kind = "medical"
     elseif needs.food then kind = "food"
     elseif needs.ammo then kind = "ammo"
+    elseif Rem.Director and g.home and g.home.x1 and (g.needs and g.needs.safety or 0) >= Rem.Director.CFG.SAFETY_WORK
+        and Rem.Director.materials(g) < CFG.MATERIALS_QUEST_BELOW then kind = "materials"
+    elseif Rem.Director and g.goal == "clear" then kind = "clear"
     else kind = (ZombRand(2) == 0) and "clear" or "lost" end
     q = { kind = kind, group = g.id, expiresAt = Rem.worldHours() + CFG.QUEST_HOURS, progress = 0 }
     if IA.FETCH[kind] then
@@ -564,7 +685,7 @@ function IA.fetchItems(player, q)
     if not spec then return {} end
     local out = {}
     for _, e in ipairs(IA.playerItems(player)) do
-        if spec.cats[categoryOf(e.item)] then table.insert(out, e) end
+        if spec.cats[categoryOf(e.item)] or (spec.types and spec.types[e.item:getFullType()]) then table.insert(out, e) end
     end
     return out
 end
@@ -572,18 +693,13 @@ end
 function IA.complete(npc, player, q)
     quests()[q.group] = nil
     if Rem.changeRep then Rem.changeRep(q.group, CFG.QUEST_REP, "missao") end
+    Rem.emit("playerDeed", "quest", npc)
     -- recompensa: o melhor item do estoque para voce, ou a localizacao de outro grupo
     local offer = IA.theirItems(npc)
     table.sort(offer, function(a, b) return IA.value(a.item) > IA.value(b.item) end)
     local reward = offer[1]
     if reward and IA.value(reward.item) >= 3 then
-        if reward.container then
-            reward.container:DoRemoveItem(reward.item)
-            player:getInventory():AddItem(reward.item)
-        else
-            player:getInventory():AddItem(reward.item:getFullType())
-            table.remove(npc.rec.carry, reward.carryIndex)
-        end
+        IA.takeFromNpc(npc, { reward }, player)
         Rem.bark(npc, "thanks", true)
         return true, line("IGUI_Rem_Quest_reward_item", reward.item:getDisplayName())
     end
@@ -606,6 +722,9 @@ function IA.turnIn(npc, player)
         for _, e in ipairs(give) do
             player:getInventory():DoRemoveItem(e.item)
             if conts and #conts > 0 then conts[1]:AddItem(e.item) end
+        end
+        if g and q.kind == "materials" and Rem.Director then
+            g.materials = Rem.Director.materials(g) + #give      -- vira trabalho nas janelas
         end
         if g and conts and #conts > 0 then
             g.home.syncCount = (g.home.syncCount or 0) + #give
@@ -671,27 +790,113 @@ function IA.threaten(npc, player)
         table.sort(offer, function(a, b) return IA.value(a.item) > IA.value(b.item) end)
         local take = {}
         for i = 1, math.min(CFG.THREAT_GIVE, #offer) do table.insert(take, offer[i]) end
-        for _, e in ipairs(take) do
-            if e.container then
-                e.container:DoRemoveItem(e.item)
-                player:getInventory():AddItem(e.item)
-            elseif e.carryIndex then
-                player:getInventory():AddItem(e.item:getFullType())
-            end
-        end
-        local keep = {}
-        local gone = {}
-        for _, e in ipairs(take) do if e.carryIndex then gone[e.carryIndex] = true end end
-        for i, ft in ipairs(rec.carry or {}) do if not gone[i] then table.insert(keep, ft) end end
-        rec.carry = keep
+        IA.takeFromNpc(npc, take, player)
         if Rem.changeRep then Rem.changeRep(key, CFG.THREAT_REP, "ameaca") end
+        Rem.emit("playerDeed", "threatened", npc)
         Rem.bark(npc, "surrender", true)
         return true, line("IGUI_Rem_Threat_comply", tostring(#take))
     end
     if Rem.changeRep then Rem.changeRep(key, CFG.THREAT_FIGHT_REP, "ameaca") end
+    Rem.emit("playerDeed", "threatened", npc)
     if Rem.angerGroup then Rem.angerGroup(key) end
     Rem.bark(npc, "angry", true)
     return false, line("IGUI_Rem_Threat_fight")
+end
+
+-- ---------------------------------------------------------------- presente
+-- Dar algo sem pedir nada: o item mais util para eles agora (comida, agua, remedio ou
+-- municao). Sobe o vinculo com a pessoa (Rem_Bonds), um pouco a reputacao e o moral.
+IA.GIFT_CATEGORIES = { Food = true, Water = true, FirstAid = true, Ammo = true }
+
+function IA.pickGift(npc, player)
+    local needs = IA.needs(npc)
+    local best, bestV = nil, 0
+    for _, e in ipairs(IA.playerItems(player)) do
+        if IA.GIFT_CATEGORIES[categoryOf(e.item)] then
+            local v = IA.value(e.item, needs)
+            if v > bestV then best, bestV = e, v end
+        end
+    end
+    return best, bestV
+end
+
+function IA.gift(npc, player)
+    local rec = npc.rec
+    local hours = Rem.worldHours()
+    if rec.giftAt and hours - rec.giftAt < CFG.GIFT_HOURS then return false, line("IGUI_Rem_Gift_enough") end
+    local e, v = IA.pickGift(npc, player)
+    if not e then return false, line("IGUI_Rem_Gift_none") end
+    local name = e.item:getDisplayName()
+    local g = groupOf(npc)
+    local conts = g and g.home and Rem.Safehouse.stashContainers(g.home)
+    player:getInventory():DoRemoveItem(e.item)
+    if conts and #conts > 0 and Rem.dist2(npc.z:getX(), npc.z:getY(), g.home.x, g.home.y) < 40 then
+        conts[1]:AddItem(e.item)
+        g.home.syncCount = (g.home.syncCount or 0) + 1
+        g.home.stashCount = (g.home.stashCount or 0) + 1
+        g.supplies = (g.supplies or 0) + 1 / Rem.World.CFG.ITEMS_PER_SUPPLY
+    else
+        rec.carry = rec.carry or {}
+        table.insert(rec.carry, e.item:getFullType())
+    end
+    rec.giftAt = hours
+    local bond = math.max(CFG.GIFT_BOND[1], math.min(CFG.GIFT_BOND[2], math.floor(CFG.GIFT_BOND[1] + v * 2)))
+    if Rem.changeRep then Rem.changeRep(rec.groupId or ("f:" .. tostring(rec.faction)), CFG.GIFT_REP, "presente") end
+    Rem.emit("playerDeed", "gift", npc, bond)
+    return true, line("IGUI_Rem_Gift_thanks", name)
+end
+
+-- ---------------------------------------------------------------- pedir ajuda
+-- O vinculo vale alguma coisa: quem gosta de voce te da comida, ou remedio se voce estiver
+-- ferido. Uma vez por dia por pessoa; gasta um pouco da boa vontade.
+function IA.askHelp(npc, player)
+    local rec = npc.rec
+    local hours = Rem.worldHours()
+    if rec.askedHelpAt and hours - rec.askedHelpAt < CFG.ASK_HOURS then return false, line("IGUI_Rem_Ask_wait") end
+    local trusted = rec.faction == "aliados" or (rec.bond or 0) >= CFG.ASK_BOND or (Rem.repOf(rec) or 0) >= CFG.ASK_REP
+    if not trusted then return false, line("IGUI_Rem_Ask_no") end
+    local health = 100
+    pcall(function() health = player:getBodyDamage():getOverallBodyHealth() end)
+    local want = (health < CFG.ASK_HURT_BELOW) and { FirstAid = true } or { Food = true, Water = true }
+    local pick = nil
+    for _, e in ipairs(IA.theirItems(npc)) do
+        if want[categoryOf(e.item)] and (not pick or IA.value(e.item) > IA.value(pick.item)) then pick = e end
+    end
+    if not pick then return false, line("IGUI_Rem_Ask_nothing") end
+    local name = pick.item:getDisplayName()
+    if IA.takeFromNpc(npc, { pick }, player) > 0 then
+        local g = groupOf(npc)
+        if g and g.home then
+            g.home.syncCount = math.max(0, (g.home.syncCount or 0) - 1)
+            g.home.stashCount = math.max(0, (g.home.stashCount or 0) - 1)
+            g.supplies = math.max(0, (g.supplies or 0) - 1 / Rem.World.CFG.ITEMS_PER_SUPPLY)
+        end
+    end
+    rec.askedHelpAt = hours
+    if Rem.Bonds and rec.faction ~= "aliados" then Rem.Bonds.add(rec, "asked", -CFG.ASK_COST) end
+    return true, line("IGUI_Rem_Ask_yes", name)
+end
+
+-- Por que nao deu certo (linha de sistema na conversa): { key, args } ou nil.
+function IA.hint(id, npc)
+    local rec = npc.rec
+    local rep = math.floor(Rem.repOf(rec) or 0)
+    if id == "info" then return line("IGUI_Rem_Hint_rep", tostring(rep), tostring(CFG.INFO_TRUST)) end
+    if id == "shelter" then return line("IGUI_Rem_Hint_rep", tostring(rep), tostring(CFG.SHELTER_REP)) end
+    if id == "join" then
+        if IA.followerCount() >= CFG.MAX_FOLLOWERS then return line("IGUI_Rem_Hint_full", tostring(CFG.MAX_FOLLOWERS)) end
+        return line("IGUI_Rem_Hint_join", tostring(math.floor(IA.joinScore(npc))), tostring(CFG.JOIN_THRESHOLD))
+    end
+    if id == "ask" then return line("IGUI_Rem_Hint_bond", tostring(math.floor(rec.bond or 0)), tostring(CFG.ASK_BOND)) end
+    if id == "order_base" and Rem.PlayerBase then return Rem.PlayerBase.hint(npc) end
+    if id == "ally" and Rem.Alliance then return Rem.Alliance.hint(npc) end
+    if id == "prisoner_recruit" and Rem.Prisoners then return Rem.Prisoners.recruitHint(npc) end
+    if id == "pact" and Rem.Diplomacy then return Rem.Diplomacy.pactHint(npc) end
+    if id == "trauma_talk" and Rem.Traumas then return Rem.Traumas.hint(npc) end
+    if id == "order_follow" and Rem.PlayerBase and Rem.PlayerBase.isMember(rec) then
+        return line("IGUI_Rem_Hint_full", tostring(CFG.MAX_FOLLOWERS))
+    end
+    return nil
 end
 
 -- ---------------------------------------------------------------- opcoes da conversa
@@ -701,17 +906,66 @@ function IA.dialogOptions(npc, player)
     local out = {}
     local function add(id) table.insert(out, id) end
     if not IA.canTalk(npc) then add("bye") return out end
+    -- preso (Rem_Prisoners): so o que se faz com um prisioneiro
+    if rec.prisoner and Rem.Prisoners then
+        add("status")
+        if Rem.Persona then add("about") end
+        for _, id in ipairs(Rem.Prisoners.dialogOptions(npc, player)) do add(id) end
+        if Rem.Diplomacy and Rem.Diplomacy.canTribute(npc) then add("tribute") end
+        add("bye")
+        return out
+    end
     add("status")
+    if rec.surrendered and Rem.Prisoners then
+        for _, id in ipairs(Rem.Prisoners.dialogOptions(npc, player)) do add(id) end
+    end
+    if Rem.Persona then add("about") end
     add("info")
     add("trade")
-    if rec.groupId and not rec.lost then add("shelter") end
+    if not rec.surrendered then add("gift") end
+    if not rec.surrendered then add("ask") end
+    if rec.ambient == "visitor" and Rem.PlayerBase and Rem.PlayerBase.get() and Rem.BaseEvents then add("accept_visitor") end
+    local own = Rem.PlayerBase and Rem.PlayerBase.isMember(rec)
+    if rec.groupId and not rec.lost and not own then add("shelter") end
     if rec.faction ~= "aliados" then add("join") end
     if rec.lost then add("findlost") end
-    if rec.groupId and not rec.lost then
+    if rec.groupId and not rec.lost and not own then
         local q = IA.questOf(npc)
         if q then add("turnin") else add("quest") end
     end
+    if Rem.Alliance and Rem.Alliance.canAsk(npc) and not rec.lost then add("ally") end
+    if Rem.War and not rec.lost and Rem.War.canSide(npc) then add("war_side") end
+    if Rem.Refugees and Rem.Refugees.canInvite(npc) then add("refugee_invite") end
+    if Rem.Diplomacy and not rec.lost then for _, id in ipairs(Rem.Diplomacy.dialogOptions(npc)) do add(id) end end
+    if Rem.PersonalQuests then for _, id in ipairs(Rem.PersonalQuests.dialogOptions(npc, player)) do add(id) end end
+    if Rem.Traumas and Rem.Traumas.canTalk(npc) then add("trauma_talk") end
     if rec.faction ~= "aliados" then add("threaten") end
+    -- ordens (so para quem segue voce)
+    if Rem.Gear and rec.faction == "aliados" then
+        if Rem.Gear.canGiveWeapon(npc, player) then add("gear_weapon") end
+        if Rem.Gear.canGiveAmmo(npc, player) then add("gear_ammo") end
+    end
+    -- fome e cansaco (Rem_Needs)
+    if Rem.Needs and rec.faction == "aliados" then
+        if Rem.Needs.canFeed(npc, player) then add("feed") end
+        if Rem.Needs.canNap(npc) then add("nap") end
+    end
+    if own then
+        -- morador da sua base: tarefa na base, ou voltar a andar com voce
+        for _, job in ipairs(Rem.PlayerBase.JOBS) do
+            if rec.job ~= job then add("order_job_" .. job) end
+        end
+        add("order_follow")
+        if rec.recruited then add("order_release") end
+    elseif rec.faction == "aliados" and Rem.Companion then
+        if rec.mode ~= "follow" then add("order_follow") end
+        if rec.mode ~= "stay" then add("order_stay") end
+        if rec.mode ~= "guard" then add("order_guard") end
+        if rec.mode ~= "loot" then add("order_loot") end
+        if Rem.PlayerBase and Rem.PlayerBase.get() then add("order_base") end
+        if Rem.Orders then for _, id in ipairs(Rem.Orders.dialogOptions(npc)) do add(id) end end
+        if rec.recruited then add("order_release") end
+    end
     add("bye")
     return out
 end
@@ -724,16 +978,60 @@ function IA.choose(id, npc, player)
     return IA.finalize(IA.chooseRaw(id, npc, player), npc)
 end
 
+local function knownCount()
+    local n = 0
+    for _ in pairs(Rem.getStore().knownGroups or {}) do n = n + 1 end
+    return n
+end
+
+-- IA.last = { id, ok }: se a ultima escolha deu certo (a janela mostra o motivo quando nao).
 function IA.chooseRaw(id, npc, player)
     IA.hold(npc)
+    IA.last = { id = id, ok = true }
+    local function res(ok, l)
+        IA.last.ok = ok and true or false
+        return l
+    end
     if id == "status" then return IA.status(npc) end
-    if id == "info" then return (IA.groupInfo(npc, player)) end
-    if id == "shelter" then return second(IA.askShelter(npc)) end
-    if id == "join" then return second(IA.askJoin(npc)) end
+    if id == "about" and Rem.Persona then return Rem.Persona.about(npc) end
+    if id == "gift" then return res(IA.gift(npc, player)) end
+    if id == "ask" then return res(IA.askHelp(npc, player)) end
+    if id == "info" then
+        local known = knownCount()
+        local l = IA.groupInfo(npc, player)
+        IA.last.ok = knownCount() > known
+        return l
+    end
+    if id == "shelter" then return res(IA.askShelter(npc)) end
+    if id == "join" then return res(IA.askJoin(npc)) end
     if id == "quest" then return second(IA.offerQuest(npc)) end
-    if id == "turnin" then return second(IA.turnIn(npc, player)) end
+    if id == "turnin" then return res(IA.turnIn(npc, player)) end
     if id == "findlost" then return second(IA.findLost(npc)) end
     if id == "threaten" then return second(IA.threaten(npc, player)) end
+    if id == "accept_visitor" and Rem.BaseEvents then return res(Rem.BaseEvents.accept(npc)) end
+    if id == "ally" and Rem.Alliance then return res(Rem.Alliance.propose(npc)) end
+    if id == "gear_weapon" and Rem.Gear then return res(Rem.Gear.giveWeapon(npc, player)) end
+    if id == "gear_ammo" and Rem.Gear then return res(Rem.Gear.giveAmmo(npc, player)) end
+    if id == "war_side" and Rem.War then return res(Rem.War.side(npc)) end
+    if id == "pact" and Rem.Diplomacy then return res(Rem.Diplomacy.pact(npc)) end
+    if id == "tribute" and Rem.Diplomacy then return res(Rem.Diplomacy.tribute(npc)) end
+    if id:sub(1, 3) == "pq_" and Rem.PersonalQuests then return res(Rem.PersonalQuests.choose(id, npc, player)) end
+    if id == "trauma_talk" and Rem.Traumas then return res(Rem.Traumas.talk(npc)) end
+    if id == "refugee_invite" and Rem.Refugees then return res(Rem.Refugees.invite(npc)) end
+    if id == "feed" and Rem.Needs then return res(Rem.Needs.feed(npc, player)) end
+    if id == "nap" and Rem.Needs then return res(Rem.Needs.nap(npc)) end
+    if id:sub(1, 9) == "prisoner_" and Rem.Prisoners then return res(Rem.Prisoners.choose(id, npc, player)) end
+    if (id:sub(1, 13) == "order_stance_" or id == "order_retreat") and Rem.Orders then return res(Rem.Orders.order(id, npc)) end
+    if Rem.PlayerBase and (id == "order_base" or id:sub(1, 10) == "order_job_"
+        or (id == "order_follow" and Rem.PlayerBase.isMember(npc.rec))) then
+        local ok, l = Rem.PlayerBase.order(id, npc, player)
+        IA.last.ok = ok and true or false
+        return l
+    end
+    if id:sub(1, 6) == "order_" and Rem.Companion then
+        local l = Rem.Companion.order(id, npc, player)
+        if l then return l end
+    end
     return line("IGUI_Rem_Talk_bye")
 end
 

@@ -72,6 +72,29 @@ function Rem.registerNpcOption(labelKey, fn, condition)
     return upsert(Rem.npcOptions, { labelKey = labelKey, fn = fn, condition = condition })
 end
 
+-- Opcoes do jogador (sempre visiveis no menu, mesmo sem ninguem por perto): fn(player).
+Rem.playerOptions = Rem.playerOptions or {}
+-- condition() -> bool (opcional): a opcao so aparece quando for verdadeira.
+function Rem.registerPlayerOption(labelKey, fn, condition)
+    if type(labelKey) ~= "string" or type(fn) ~= "function" then return nil end
+    for i, o in ipairs(Rem.playerOptions) do
+        if o.labelKey == labelKey then
+            Rem.playerOptions[i] = { labelKey = labelKey, fn = fn, condition = condition }
+            return Rem.playerOptions[i]
+        end
+    end
+    table.insert(Rem.playerOptions, { labelKey = labelKey, fn = fn, condition = condition })
+    return Rem.playerOptions[#Rem.playerOptions]
+end
+
+-- Opcoes sobre um zumbi perto do clique (ex.: "Aliados: ataquem este!").
+--   Rem.registerTargetOption("ContextMenu_Rem_Z", function(zombie, player) ... end, function(zombie) return ... end)
+Rem.targetOptions = Rem.targetOptions or {}
+function Rem.registerTargetOption(labelKey, fn, condition)
+    if type(labelKey) ~= "string" or type(fn) ~= "function" then return nil end
+    return upsert(Rem.targetOptions, { labelKey = labelKey, fn = fn, condition = condition })
+end
+
 function Rem.unregisterDebugOption(labelKey)
     for i = #Rem.debugOptions, 1, -1 do
         if Rem.debugOptions[i].labelKey == labelKey then table.remove(Rem.debugOptions, i) end

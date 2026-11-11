@@ -1,8 +1,8 @@
-name=Remanescentes
+name=Primeiros Dias
 id=Remanescentes
 author=Guilherme
-description=Sobreviventes humanos vivendo o apocalipse: grupos em safehouses, saques reais, combate justo, Dia Zero, mundo persistente, conversa, troca e missoes. Single player.
+description=Os primeiros dias da queda: sobreviventes humanos com vida propria, grupos que buscam comida, fecham as casas e se defendem, saqueadores, historias e consequencias. Single player.
 poster=poster.png
 category=features
 versionMin=42.20
-modversion=0.9.0
+modversion=0.22.0

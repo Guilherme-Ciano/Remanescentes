@@ -95,9 +95,37 @@ Conversar (menu de diálogo curto), trocar (valor pela necessidade do grupo), pe
 | F2 Desempenho | Índice espacial de zumbis (`Rem_Spatial.lua`, células de 8 tiles, refeito no máximo a cada 100 ms): busca de inimigos, percepção, tiro e eventos de rua deixaram de varrer todos os zumbis por NPC. Com 1500 zumbis e 12 NPCs: de 2,29 para 0,71 ms por quadro (`tests/bench/bench.lua`). |
 | F3 Sandbox | 27 opções em 4 abas: **Sobreviventes**, **Mundo**, **Zumbis** e **Teste**. Os padrões já são o perfil "Dia Zero" (saqueadores a partir do dia 4, colapso normal, gente na rua 100%). `DebugMenu` desligado por padrão. |
 | F4 Ferramentas de teste | Menu dividido em submenus (Criar, Mundo e grupos, Gente de passagem, Reputação, Outros). |
-| F5 Interação mais bonita e real | Janela de conversa com **retrato 3D** do NPC, ficha, facção colorida, barra de reputação e histórico da conversa; janela de troca com **ícones**, valores, o que o grupo precisa e o saldo; respostas e falas com **variações** e **tom pela personalidade** (medroso, durão), sem repetir a última fala. |
+| F5 Interação mais bonita e real | Falas desenhadas pelo mod sobre a cabeça dos NPCs (o `Say` do jogo não funciona em corpo de zumbi). Janela de conversa com retrato (ícone da profissão), **Ficha em janela**, facção colorida, barra de reputação e histórico da conversa; janela de troca com **ícones**, valores, o que o grupo precisa e o saldo; respostas e falas com **variações** e **tom pela personalidade** (medroso, durão), sem repetir a última fala. |
 | F6 Compatibilidade | Conferido com o modlist (ZombieBuddy, SmarterStorage, MapSymbolSizeSlider, EquipmentUI, EfficiencySkillMod2, DGVCurtains, HeliEvent, DGVWindows3D): nenhum substitui o que o mod usa. Os ganchos do mod encadeiam o original (mapa do mundo, pesca), e as marcações respeitam a escala do MapSymbolSizeSlider. |
 | F7 Pacote | README, CHANGELOG, roteiro de testes por sistema, pasta da Workshop (`workshop/`) com descrição e imagem. Envio só depois da validação no jogo. |
+
+### Fase G: Vida ✅ 0.10.0 (falta validar no jogo)
+Pedido: "mais vida aos personagens e eventos, sistemas que fazem sentido, mais personalidade, mais divertido".
+
+| Etapa | Feito |
+|---|---|
+| G1 Personalidade viva | Jeito, história, humor e moral que saem do estado real; luto; refeições em casa (`Rem_Persona`, `Rem_Routine`). |
+| G2 Relação pessoal | Vínculo e memória por pessoa, presentes, cumprimentos que lembram de você, experiência por zumbis mortos (`Rem_Bonds`). |
+| G3 Mundo falante | Conversas entre NPCs por assunto e comentários de contexto (`Rem_Banter`). |
+| G4 Histórias | Mascate, emboscada, refém, enlutado e cerco com mensageiro (`Rem_Stories`). |
+| G5 Confiabilidade | Lição da 0.9.1 (`Say` não funciona em zumbi; `UI3DModel` quebra a interface): todas as chamadas à API conferidas nas classes Java do jogo; sistemas novos só usam chamadas já validadas no jogo ou conferidas. |
+
+### Fase H: Primeiros Dias ✅ 0.11.0 (falta validar no jogo)
+Do teste da 0.10: civis só fugiam, zumbis ignoravam os outros sobreviventes, opções sem efeito visível, sistemas que não se conversavam.
+
+| Etapa | Feito |
+|---|---|
+| H1 Decisão por pessoa | Lutar ou fugir por força × nervo contra o perigo (`Rem_Tactics`); ajudar companheiro atacado. |
+| H2 Zumbis de verdade | Troca de alvo por distância; barulho de sobrevivente atrai zumbis para ele. |
+| H3 Decisão por grupo | Necessidades → objetivo → trabalho visível (`Rem_Director`): pregar tábuas, limpar a rua, esconder, buscar comida e material; casas abertas nos primeiros dias. |
+| H4 Consequências | Linhas de efeito e de motivo na conversa, pedir ajuda, missão de material, Diário com avisos (`Rem_Journal`). |
+| H5 Nome | "Primeiros Dias" em tudo o que o jogador vê; ID interno mantido. |
+
+### Fase I: correções e usabilidade ✅ 0.12.0 (falta validar no jogo)
+Do teste da 0.11: anotações enormes no mapa, aliado que não saqueava, troca vazia, pânico com aliado por perto, recrutamento fácil.
+Feito: tamanhos fixos no mapa (e reajuste das antigas), portas e quadrado livre ao lado do armário, bolsos, correção do pânico, recrutamento por vínculo com limite de aliados, destravar, alcançar, ordens para todos e pela conversa.
+
+Ideias seguintes: rádio, ataques à base do jogador, caravanas entre grupos, aliados com necessidades (fome/sono), pedidos pessoais dos aliados.
 
 ---
 

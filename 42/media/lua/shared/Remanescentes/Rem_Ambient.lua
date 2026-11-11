@@ -93,11 +93,20 @@ function AM.urban(player, now)
 end
 
 -- Pesos do momento, pela linha do tempo.
+-- Extensao (Rem_Stories e outros modulos): alem de AM.SPAWN[tipo] e AM.WEIGHTS[tipo],
+--   AM.HANDLERS[tipo] = function(npc, ctx, now) -> true se tratou o tick
+--   AM.WEIGHT_MOD[tipo] = function(peso, x, y) -> peso do momento (linha do tempo etc.)
+AM.HANDLERS = AM.HANDLERS or {}
+AM.WEIGHT_MOD = AM.WEIGHT_MOD or {}
+
 function AM.weights(x, y)
     local TL = Rem.Timeline
     local chaos = TL.density()               -- 1 no inicio, cai com os dias
     local w = {}
-    for k, v in pairs(AM.WEIGHTS) do w[k] = v end
+    for k, v in pairs(AM.WEIGHTS) do
+        local mod = AM.WEIGHT_MOD[k]
+        w[k] = mod and mod(v, x, y) or v
+    end
     w.runner = w.runner * chaos
     w.knock = w.knock * chaos
     w.boarder = w.boarder * chaos
@@ -363,7 +372,12 @@ function AM.trySpawn(player, now, forced)
 end
 
 -- ---------------------------------------------------------------- comportamento
-local function leave(npc, player)
+local leave
+function AM.leave(npc, player) return leave(npc, player) end
+function AM.makePerson(sq, opts) return makePerson(sq, opts) end
+function AM.zombiesAt(x, y, n, spread) return zombiesAt(x, y, n, spread) end
+
+leave = function(npc, player)
     local rec = npc.rec
     rec.ambient = "walker"
     rec.spotX, rec.spotY = nil, nil
@@ -407,10 +421,18 @@ function AM.behavior(npc, ctx, now)
         leave(npc, player)
     end
 
+    local handler = AM.HANDLERS[kind]
+    if handler then
+        local handled = handler(npc, ctx, now)
+        if handled then return true end
+        kind = rec.ambient   -- o tratador pode ter mudado o tipo (ex.: virou "walker")
+    end
+
     if kind == "help" then
         local safe = not zombieNear(npc, CFG.HELP_SAFE_RADIUS)
         if safe and player and Rem.dist(npc.z, player) <= CFG.HELP_SAFE_RADIUS then
             Rem.bark(npc, "thanks", true)
+            Rem.emit("playerDeed", "saved", npc)
             if Rem.changeRep then Rem.changeRep("f:civis", CFG.HELP_REP, "salvou um civil") end
             leave(npc, player)
             return true
@@ -535,9 +557,12 @@ Events.EveryTenMinutes.Add(function() Rem.safe(AM.cleanup) end)
 Rem.registerBehavior({ name = "ambient", priority = CFG.PRIORITY, run = AM.behavior })
 
 -- ferramentas de teste: forcar cada tipo
-for _, kind in ipairs({ "walker", "runner", "family", "help", "knock", "boarder", "fight", "scavenger", "raider", "gunshot" }) do
+function AM.registerDebugKind(kind)
     Rem.registerDebugOption("ContextMenu_Rem_Amb_" .. kind, function(x, y, z, player)
         local k, list = AM.trySpawn(player, Rem.nowMs(), kind)
         player:Say(tostring(k) .. ": " .. tostring(list and #list or 0))
     end)
+end
+for _, kind in ipairs({ "walker", "runner", "family", "help", "knock", "boarder", "fight", "scavenger", "raider", "gunshot" }) do
+    AM.registerDebugKind(kind)
 end

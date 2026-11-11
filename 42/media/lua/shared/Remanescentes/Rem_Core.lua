@@ -23,7 +23,7 @@ local Rem = Remanescentes
 require "Remanescentes/Rem_Events"
 require "Remanescentes/Rem_Registry"
 
-Rem.VERSION = "0.9.0"
+Rem.VERSION = "0.22.0"
 Rem.MODDATA_KEY = "Remanescentes"
 
 -- Pessoas com corpo agora: [IsoZombie] = npc (estado de runtime, nao salvo)
@@ -192,9 +192,37 @@ function Rem.dist2(x1, y1, x2, y2)
     return math.sqrt(dx * dx + dy * dy)
 end
 
+-- Fala de um sobrevivente. ATENCAO: IsoGameCharacter.Say() nao faz nada em zumbis (o
+-- corpo do NPC e um IsoZombie), entao o texto fica em npc.speech e o cliente desenha sobre
+-- a cabeca dele (client/Rem_SpeechUI.lua). z:Say continua sendo chamado: no jogo nao faz
+-- nada, e nos testes offline registra o que foi dito.
+Rem.SPEECH = { BASE_MS = 3000, PER_CHAR_MS = 60, MAX_MS = 9000, LINES = 2 }
+
+function Rem.speak(npc, text, r, g, b)
+    if not npc or not npc.z or not text or text == "" then return end
+    text = tostring(text)
+    local now = Rem.nowMs()
+    local ms = math.min(Rem.SPEECH.MAX_MS, Rem.SPEECH.BASE_MS + #text * Rem.SPEECH.PER_CHAR_MS)
+    npc.speech = npc.speech or {}
+    table.insert(npc.speech, { text = text, at = now, untilMs = now + ms, r = r, g = g, b = b })
+    while #npc.speech > Rem.SPEECH.LINES do table.remove(npc.speech, 1) end
+    pcall(function() npc.z:Say(text) end)
+end
+
+-- Falas ainda visiveis (mais antiga primeiro).
+function Rem.speechOf(npc, now)
+    local list = npc and npc.speech
+    if not list then return {} end
+    now = now or Rem.nowMs()
+    for i = #list, 1, -1 do
+        if now >= list[i].untilMs then table.remove(list, i) end
+    end
+    return list
+end
+
 function Rem.say(npc, textKey, ...)
     if npc and npc.z then
-        Rem.safe(function(...) npc.z:Say(getText(textKey, ...)) end, ...)
+        Rem.safe(function(...) Rem.speak(npc, getText(textKey, ...)) end, ...)
     end
 end
 

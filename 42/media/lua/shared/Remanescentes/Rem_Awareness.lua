@@ -143,6 +143,19 @@ function A.giveUp(npc, now, quiet)
     aw.lastSeen, aw.searchUntil = nil, nil
 end
 
+-- Ja sabe onde voce esta (ex.: emboscada, Rem_Stories): comeca a perseguir na hora.
+function A.alert(npc, player, now)
+    local aw = A.state(npc)
+    aw.level = 1
+    aw.lastX, aw.lastY, aw.lastZ = player:getX(), player:getY(), player:getZ()
+    aw.lastSeen, aw.updatedAt = now, now
+    if aw.state ~= "chase" then
+        aw.state = "chase"
+        aw.chaseStart = now
+        Rem.emit("spottedPlayer", npc, now)
+    end
+end
+
 -- Atualiza a atencao do npc sobre o jogador. Retorna true se o jogador e o inimigo atual
 -- (visto agora ou ha pouquissimo tempo).
 function A.trackPlayer(npc, player, now)

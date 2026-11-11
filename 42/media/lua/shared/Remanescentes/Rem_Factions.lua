@@ -66,6 +66,11 @@ end
 function Rem.npcsHostile(a, b)
     -- rixa pessoal (ex.: dois civis brigando por comida, Rem_Ambient)
     if (a.rec.foeId and a.rec.foeId == b.rec.id) or (b.rec.foeId and b.rec.foeId == a.rec.id) then return true end
+    -- refem (Rem_Stories): ninguem bate em quem esta rendido no chao; disfarcado ainda nao
+    -- mostrou de que lado esta
+    if a.rec.captive or b.rec.captive or a.rec.disguised or b.rec.disguised then return false end
+    -- prisioneiro seu (Rem_Prisoners): ninguem bate em quem esta preso
+    if a.rec.prisoner or b.rec.prisoner then return false end
     return Rem.factionsHostile(a.rec.faction, b.rec.faction)
 end
 

@@ -158,7 +158,9 @@ function MG.handle(npc, player, d, now)
             truce(E, now, nil, false)
             return true
         end
-        if Rem.healthFraction(npc) < CFG.SURRENDER_BELOW and d <= CFG.SURRENDER_DIST then
+        -- o "cacador de saqueadores" (Rem_Fame) faz eles se renderem mais cedo
+        local below = CFG.SURRENDER_BELOW + ((Rem.Fame and Rem.Fame.store().titles.cacador) and 0.15 or 0)
+        if Rem.healthFraction(npc) < below and d <= CFG.SURRENDER_DIST then
             MG.surrender(npc, now)
             return true
         end

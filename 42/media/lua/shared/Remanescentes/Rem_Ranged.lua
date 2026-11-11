@@ -145,6 +145,9 @@ function RG.hitChance(npc, g, target, d, now)
     if targetRunning(target) then c = c - CFG.RUNNING_PENALTY end
     if now - (npc.movedAt or -99999) < 1000 then c = c - CFG.MOVED_PENALTY end
     c = c + Rem.difficulty().acc
+    -- experiencia (Rem_Bonds): quem ja lutou muito atira melhor; nunca contra voce
+    if Rem.Bonds and not Rem.isPlayerObj(target) then c = c + Rem.Bonds.accuracyBonus(npc) end
+    if Rem.Needs then c = c - Rem.Needs.accuracyPenalty(npc.rec) end
     return math.max(CFG.MIN_HIT, math.min(CFG.MAX_HIT, c))
 end
 
@@ -207,6 +210,7 @@ local function hitZombie(npc, target, dmg, now)
         target:setHealth(0)
         Rem.safe(function() target:Kill(nil) end)
         Rem.bark(npc, "kill")
+        Rem.emit("npcKilledZombie", npc, target)
         Rem.debug((npc.rec.name or "?") .. " matou um zumbi a tiro")
     else
         target:setHealth(hp)
@@ -262,6 +266,10 @@ end
 
 -- Chamado pelo cerebro antes do corpo a corpo. true = cuidou deste "pensamento".
 function Rem.tryRanged(npc, enemy, d, now)
+    if npc.rec.stance == "hold" or npc.rec.prisoner then   -- segurar fogo (Rem_Orders), preso
+        if npc.gunOut then RG.equip(npc, false) end
+        return false
+    end
     if not RG.canShoot(npc) then
         if npc.gunOut then RG.equip(npc, false) end
         return false

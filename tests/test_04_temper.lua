@@ -48,11 +48,12 @@ Rem.hunting = {}
 realPrint("17) Civil foge, saqueador ataca")
 Rem.dismissAll(); clearZombies(); Rem.hunting = {}
 player.x, player.y = 400, 400
-local civil = Rem.spawn(420, 420, 0, { faction = "civis", mode = "wander" })
+local civil = Rem.spawn(420, 420, 0, { faction = "civis", mode = "wander",
+    personality = { agressividade = 1, confianca = 5, coragem = 1, ganancia = 3, lealdade = 5 } })   -- covarde
 local scary = newZombie(420, 424, 0, 0, -1)
 tick(600); tick(300)
 check(Rem.hunting[scary] ~= nil, "(cenario) zumbi percebeu o civil")
-check(civil.fleeing and civil.running, "civil foge correndo de zumbi que o viu")
+check(civil.fleeing and civil.running, "civil covarde foge correndo de zumbi que o viu")
 check(civil.z.path and civil.z.path[2] < 420, "foge para o lado oposto")
 Rem.dismissAll(); clearZombies(); Rem.hunting = {}
 -- arquetipo fixo: um saqueador furtivo (Rem_Profile) chega agachado e so ataca zumbi distraido de perto
@@ -79,6 +80,41 @@ chaser.target = player; tick(20)
 check(chaser.noTeeth == false and Rem.hunting[chaser] == nil, "voltou ao jogador: dentes de volta")
 tick(600)
 check(chaser.target == player, "nao troca de novo logo em seguida (sem ficar indeciso)")
-local far2 = newZombie(500, 490, 0, 0, 1); far2.target = player
+local far2 = newZombie(500, 485, 0, 0, 1); far2.target = player
 tick(600)
 check(far2.target == player, "saqueador longe do zumbi nao distrai")
+
+realPrint("18b) Zumbis ligam para os sobreviventes como ligam para voce")
+Rem.dismissAll(); clearZombies(); Rem.hunting = {}
+player.x, player.y = 520, 520
+local bait = Rem.spawn(520, 510, 0, { faction = "civis", mode = "stay" })
+bait.nextAttack = T.clock + 9999999
+local mid = newZombie(520, 505, 0, 0, 1); mid.target = player      -- 5 do civil, 15 de voce
+tick(600)
+check(mid.target == bait.z, "zumbi atras de voce troca para o sobrevivente bem mais perto dele (5 x 15 tiles)")
+local even = newZombie(526, 515, 0, 0, 1); even.target = player    -- ~7,8 do civil, ~7,8 de voce
+tick(600)
+check(even.target == player, "a mesma distancia, continua em voce")
+-- barulho: zumbis livres vem atras de QUEM fez o barulho
+Rem.dismissAll(); clearZombies(); Rem.hunting = {}
+local loud = Rem.spawn(540, 540, 0, { faction = "civis", mode = "stay" })
+local back = newZombie(540, 548, 0, 0, 1)                           -- de costas para ele, a 8 tiles
+local faraway = newZombie(540, 570, 0, 0, 1)
+T.clock = T.clock + 200      -- (o indice de zumbis por perto e refeito a cada 100 ms)
+local realRand = ZombRand
+ZombRand = function(a, b) return b and a or 0 end
+local n = Rem.Perception.attract(loud, 20)
+ZombRand = realRand
+check(n == 1 and Rem.hunting[back] and Rem.hunting[back].npc == loud and back.target == loud.z, "barulho de um sobrevivente: o zumbi livre por perto vai atras dele")
+check(Rem.hunting[faraway] == nil, "longe demais nao escuta")
+Rem.stopHunt(back)
+T.clock = T.clock + 200
+ZombRand = function(a, b) return b and a or 0 end
+Rem.makeNoise(loud, 20)
+ZombRand = realRand
+check(Rem.hunting[back] and Rem.hunting[back].npc == loud, "todo barulho que ele faz (golpe, tiro, corrida) chama os zumbis")
+local busy = newZombie(541, 545, 0, 0, 1); busy.target = player
+T.clock = T.clock + 200
+Rem.Perception.attract(loud, 20)
+check(Rem.hunting[busy] == nil, "quem ja esta atras de alguem nao larga por causa do barulho")
+Rem.dismissAll(); clearZombies(); Rem.hunting = {}

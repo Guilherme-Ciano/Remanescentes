@@ -90,14 +90,14 @@ def font(name, size):
         if os.path.exists(p): return ImageFont.truetype(p, size)
     return ImageFont.load_default()
 
-title = "REMANESCENTES"
+title = "PRIMEIROS DIAS"
 f = font("OpenSans-CondensedExtraBold.ttf", 150)
 w = d.textlength(title, font=f)
 while w > S - 110:
     f = font("OpenSans-CondensedExtraBold.ttf", f.size - 4); w = d.textlength(title, font=f)
 d.text(((S - w) / 2 + 4, 74), title, font=f, fill=(0, 0, 0))
 d.text(((S - w) / 2, 70), title, font=f, fill=(236, 226, 208))
-sub = "SOBREVIVENTES HUMANOS  ·  BUILD 42"
+sub = "A QUEDA COMEÇA AQUI  ·  BUILD 42"
 fs = font("RobotoCondensed-Bold.ttf", 40)
 ws = d.textlength(sub, font=fs)
 d.text(((S - ws) / 2, 70 + f.size * 1.25), sub, font=fs, fill=(214, 128, 60))

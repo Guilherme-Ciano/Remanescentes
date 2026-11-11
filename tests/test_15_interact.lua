@@ -77,6 +77,7 @@ local their = box.container:AddItem("Base.CannedChili")
 player.inv.items = {}
 local junk = player.inv:AddItem("Base.Sofa")
 local mine = player.inv:AddItem("Base.Bandage")
+npc.rec.pockets = {}
 local offer = IA.theirItems(npc)
 check(#offer == 1 and offer[1].item == their, "eles oferecem o que esta no estoque da casa")
 local ok, res = IA.trade(player, npc, { { item = junk } }, { offer[1] })
@@ -128,11 +129,40 @@ check(not ok and l.key ~= "IGUI_Rem_Talk_refuse", "pouca lealdade e reputacao ne
 ok, l = IA.askJoin(loyal)
 check(not ok and l.key == "IGUI_Rem_Join_asked", "pergunta repetida no mesmo dia: 'ja respondi'")
 loyal.rec.askedJoinAt = nil
-loyal.rec.personality.lealdade = 10
+loyal.rec.personality.lealdade, loyal.rec.personality.confianca = 10, 8
 Rem.changeRep(gr.id, 200, "teste")
+ok, l = IA.askJoin(loyal)
+check(not ok and l.key:find("IGUI_Rem_Join_group"), "so lealdade e fama com o grupo nao bastam: quem tem casa nao segue um conhecido (" .. l.key .. ")")
+check(IA.hint("join", loyal).key == "IGUI_Rem_Hint_join", "a conversa diz que o que pesa e o vinculo")
+loyal.rec.askedJoinAt = nil
+loyal.rec.bond = 40                      -- voce ja fez muito por ele
 local nBefore = #gr.members
 ok, l = IA.askJoin(loyal)
-check(ok and loyal.rec.faction == "aliados" and loyal.rec.mode == "follow" and #gr.members == nBefore - 1, "lealdade alta + reputacao: vira seu aliado")
+check(ok and loyal.rec.faction == "aliados" and loyal.rec.mode == "follow" and #gr.members == nBefore - 1, "com vinculo forte: vira seu aliado")
+-- estranho de passagem: nao segue na primeira conversa
+local passer = Rem.spawn(loyal.z.x + 2, loyal.z.y, 0, { faction = "civis", mode = "stay",
+    personality = { agressividade = 2, confianca = 6, coragem = 5, ganancia = 3, lealdade = 7 } })
+passer.rec.transient = true
+ok = IA.askJoin(passer)
+check(not ok and IA.joinScore(passer) < IA.CFG.JOIN_THRESHOLD, "um estranho na rua nao larga tudo para te seguir (" .. math.floor(IA.joinScore(passer)) .. " de " .. IA.CFG.JOIN_THRESHOLD .. ")")
+passer.rec.askedJoinAt = nil
+Rem.Bonds.add(passer.rec, "saved"); Rem.Bonds.add(passer.rec, "gift", 12); Rem.Bonds.add(passer.rec, "about")
+ok = IA.askJoin(passer)
+check(ok, "depois de salva-lo, dar um presente e ouvir a historia dele: aceita")
+-- limite de aliados
+local extra = {}
+for i = 1, IA.CFG.MAX_FOLLOWERS do
+    local e = Rem.spawn(loyal.z.x + 3 + i, loyal.z.y + 2, 0, { faction = "civis", mode = "stay" })
+    e.rec.bond = 100
+    table.insert(extra, e)
+end
+local accepted = 0
+for _, e in ipairs(extra) do if IA.askJoin(e) then accepted = accepted + 1 end end
+check(IA.followerCount() == IA.CFG.MAX_FOLLOWERS and accepted == IA.CFG.MAX_FOLLOWERS - 2, "no maximo " .. IA.CFG.MAX_FOLLOWERS .. " aliados ao mesmo tempo")
+local okFull, lFull = IA.askJoin(extra[#extra])
+check(not okFull and lFull.key == "IGUI_Rem_Join_full" and IA.hint("join", extra[#extra]).key == "IGUI_Rem_Hint_full", "e a conversa explica o limite")
+for _, e in ipairs(extra) do Rem.dismiss(e) end
+Rem.dismiss(passer)
 check(loyal.z.avoid == true, "e protegido dos seus golpes como aliado")
 -- guardar posicao
 IA.guard(loyal)
@@ -143,6 +173,7 @@ check(loyal.z.path and math.floor(loyal.z.path[1]) == gx, "guardar posicao: volt
 -- saquear aqui
 local dL = house(30202, 30700, 30000, 8, 6)
 local shelf = T.addObject(30702, 30002, 0, "container", { type = "shelves" })
+player.x, player.y = 30704, 30012        -- voce esta ali perto (longe demais ele larga e volta)
 ok = IA.lootHere(loyal, getCell():getGridSquare(30703, 30003, 0))
 check(ok and loyal.rec.mode == "loot", "saquear aqui: vai ate o predio")
 loyal.z.x, loyal.z.y = 30702.5, 30002.5
@@ -254,14 +285,26 @@ function ISUIElement:getX() return self.x end
 function ISUIElement:drawText(t) self.drawn = self.drawn or {} table.insert(self.drawn, t) end
 function ISUIElement:drawRect() end
 function ISUIElement:drawRectBorder() end
-function ISUIElement:drawTextureScaledAspect() end
+function ISUIElement:drawTextureScaledAspect(tex) self.textures = self.textures or {} table.insert(self.textures, tex) end
 function ISUIElement:setY(y) self.y = y end
+function ISUIElement:getY() return self.y end
 function ISUIElement:setYScroll() end
 function ISUIElement:setVisible(v) self.visible = v end
 IsoDirections = { S = "S" }
 ISUI3DModel = setmetatable({}, { __index = ISUIElement })
 ISUI3DModel.__index = ISUI3DModel
-function ISUI3DModel:new(x, y, w, h) return setmetatable({ x = x, y = y, width = w, height = h }, ISUI3DModel) end
+function ISUI3DModel:new(x, y, w, h) T.used3DModel = true return setmetatable({ x = x, y = y, width = w, height = h }, ISUI3DModel) end
+-- icones de profissao do jogo (CharacterProfessionDefinition)
+local profTexture = { name = "tex:policia" }
+CharacterProfessionDefinition = { getProfessions = function()
+    local defs = { { type = "base:policeofficer", ui = "UI_prof_policeoff", tex = profTexture } }
+    for _, d in ipairs(defs) do
+        function d:getType() return self.type end
+        function d:getUIName() return getText(self.ui) end
+        function d:getTexture() return self.tex end
+    end
+    return { size = function() return #defs end, get = function(_, i) return defs[i + 1] end }
+end }
 function ISUI3DModel:setOutfitName(n, f) self.outfit, self.female = n, f end
 function ISUI3DModel:setState(s) self.state = s end
 function ISUI3DModel:setDirection() end
@@ -304,19 +347,27 @@ player.x, player.y = un.z.x + 1, un.z.y
 local w = RemDialogWindow.open(un, player)
 check(w and w.historyPanel.text and w.historyPanel.text:find("IGUI_Rem_Talk_hi_"), "janela de conversa abre com o cumprimento no historico")
 w:render()
-check(w.avatar.outfit == un.rec.outfit and w.avatar.state == "idle", "retrato 3D com a roupa dele, em pose humana")
+check(not T.used3DModel, "sem modelo 3D na janela (o UI3DModel do jogo trava o desenho da interface)")
+local drewFaction = false
+for _, t in ipairs(w.drawn or {}) do if t == getText("IGUI_Rem_Faction_" .. un.rec.faction) then drewFaction = true end end
+check(drewFaction and (w.drawn or {})[1] ~= nil, "retrato 2D com a faccao e a ficha ao lado")
+un.rec.profession, un.rec.professionUI = "base:policeofficer", "UI_prof_policeoff"
+w.textures = {}
+w:render()
+check(w.textures[1] == profTexture, "o retrato usa o icone da profissao do jogo")
 local said = false
 for _, t in ipairs(un.z.said) do if t:find("IGUI_Rem_Talk_hi_") then said = true end end
-check(said, "o cumprimento tambem aparece em balao sobre ele")
+check(said and un.speech and #un.speech > 0, "o cumprimento tambem aparece sobre a cabeca dele")
 local ids = {}
 for _, b in ipairs(w.buttons) do ids[b.internal] = b end
 ids.bye = w.byeButton
 check(ids.status and ids.trade and ids.join and ids.bye, "botoes das opcoes (e 'ate mais' separado)")
 check(w.buttons[1].title:sub(1, 2) == "1.", "opcoes numeradas")
 ids.status.onclick(w, ids.status)
-check(w.lastLine:find("IGUI_Rem_Talk_need_") and w.historyPanel.text:find("IGUI_Rem_Talk_you"), "clicou 'como voces estao': sua pergunta e a resposta entram no historico")
+check((w.lastLine:find("IGUI_Rem_Talk_need_") or w.lastLine:find("IGUI_Rem_Goal_")) and w.historyPanel.text:find("IGUI_Rem_Talk_you"), "clicou 'como voces estao': sua pergunta e a resposta entram no historico")
 check(w.lastLine:find("_%d$"), "a resposta vem de uma das variacoes (" .. w.lastLine .. ")")
 check(un.talkingUntil and un.talkingUntil > T.clock, "o NPC para para conversar")
+un.rec.pockets = {}
 ids.trade.onclick(w, ids.trade)
 local tw = RemTradeWindow.instance
 check(tw and #tw.theirs.items == 1, "janela de troca abre com o estoque deles")
@@ -336,6 +387,37 @@ check(tw.ok.enabled == true, "troca justa marcada: 'Trocar' habilitado")
 check(tw.needsText and tw.markupText, "mostra do que precisam e a margem deles")
 tw:onAccept()
 check(hasItem("Base.CannedChili"), "marcou os itens e trocou pela janela")
+-- Ficha numa janela
+w.drawn = {}
+local profOpt
+for _, o in ipairs(Rem.npcOptions) do if o.labelKey == "ContextMenu_Rem_Profile" then profOpt = o end end
+profOpt.fn(un)
+local pw = RemProfileWindow.instance
+check(pw and pw.shown and pw.npc == un, "Ficha abre numa janela")
+pw:render()
+local txt = table.concat(pw.drawn or {}, "|")
+check(txt:find(un.rec.name, 1, true) and txt:find("IGUI_Rem_Trait_coragem", 1, true) and txt:find("IGUI_Rem_Profile_health", 1, true),
+    "a Ficha mostra nome, vida e personalidade")
+check(txt:find("%%%%") == nil, "sem '%%' literal na Ficha")
+check(txt:find("IGUI_Rem_Quirk_" .. un.rec.quirk, 1, true) and txt:find("IGUI_Rem_Mood_", 1, true) and txt:find("IGUI_Rem_Profile_bond", 1, true)
+    and txt:find("IGUI_Rem_Profile_level", 1, true), "e tambem o jeito, o humor, o vinculo e a experiencia")
+un.rec.mem, un.rec.toldStory = nil, nil
+pw.drawn = {}
+pw:render()
+txt = table.concat(pw.drawn or {}, "|")
+check(txt:find("IGUI_Rem_Profile_nomem", 1, true) and txt:find("IGUI_Rem_Profile_nostory", 1, true) and not txt:find("IGUI_Rem_Story_lost_", 1, true),
+    "sem lembrancas ainda; a historia so aparece depois que ele contar")
+Rem.Bonds.add(un.rec, "gift")
+Rem.Bonds.add(un.rec, "hit", -1)
+un.rec.toldStory = true
+pw.drawn = {}
+pw:render()
+txt = table.concat(pw.drawn or {}, "|")
+check(txt:find("IGUI_Rem_Mem_gift", 1, true) and txt:find("IGUI_Rem_Mem_hit", 1, true) and txt:find("IGUI_Rem_Story_lost_" .. un.rec.story.lost, 1, true)
+    and txt:find("IGUI_Rem_Story_goal_" .. un.rec.story.goal, 1, true), "lembrancas e historia aparecem na Ficha")
+un.rec.bond, un.rec.mem, un.rec.toldStory = 0, nil, nil
+pw:close()
+check(RemProfileWindow.instance == nil, "Ficha fecha")
 player.x = un.z.x + 20
 w:update()
 check(w.closed, "voce se afastou: a janela fecha")

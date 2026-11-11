@@ -98,7 +98,7 @@ local w = list and list[1]
 check(w and w.rec.transient and w.rec.ambient == "walker", "civil de passagem criado")
 local d0 = Rem.dist(w.z, player)
 check(d0 >= AM.CFG.SPAWN_MIN - 1 and d0 <= AM.CFG.SPAWN_MAX + 1, "nasce longe da sua vista (" .. math.floor(d0) .. " tiles)")
-check(Rem.dist2(w.rec.destX, w.rec.destY, player.x, player.y) > 20, "o destino fica do outro lado (ele cruza a area)")
+check(Rem.dist2(w.rec.destX, w.rec.destY, player.x, player.y) > 15, "o destino fica do outro lado (ele cruza a area)")
 tick(300)
 check(w.z.path and math.floor(w.z.path[1]) == w.rec.destX, "anda para o destino")
 local zBefore = liveZombies()

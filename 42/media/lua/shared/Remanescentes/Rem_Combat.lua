@@ -152,14 +152,16 @@ local function applyHit(npc, target)
     local other = Rem.active[target]
     if other then
         Rem.hitReact(other, now)
-        Rem.damageNPC(other, dmg * Rem.cfg("NPCDamageMultiplier", 1.0), npc)
+        Rem.damageNPC(other, dmg * Rem.cfg("NPCDamageMultiplier", 1.0) * (Rem.Wounds and Rem.Wounds.damageMult(npc.rec) or 1), npc)
         Rem.makeNoise(npc, weaponNoise(item))
         if not Rem.active[target] then Rem.bark(npc, "kill") end
         return
     end
 
     -- zumbi
-    dmg = dmg * Rem.cfg("NPCDamageMultiplier", 1.0)
+    dmg = dmg * Rem.cfg("NPCDamageMultiplier", 1.0) * (Rem.Bonds and Rem.Bonds.damageMult(npc) or 1)
+        * (Rem.Needs and Rem.Needs.damageMult(npc.rec) or 1)
+        * (Rem.Wounds and Rem.Wounds.damageMult(npc.rec) or 1)
     local stealth = npc.sneaking and not Rem.isAware(target, npc) and not Rem.isFacing(target, npc.z, 0.3)
     if stealth then dmg = dmg * M.CFG.STEALTH_MULT end
     Rem.safe(function() target:splatBloodFloor() end)
@@ -169,6 +171,7 @@ local function applyHit(npc, target)
         target:setHealth(0)
         Rem.safe(function() target:Kill(nil) end)
         Rem.bark(npc, "kill")
+        Rem.emit("npcKilledZombie", npc, target)
         Rem.debug((npc.rec.name or "?") .. " matou um zumbi" .. (stealth and " (furtivo)" or ""))
     else
         target:setHealth(hp)
@@ -213,6 +216,7 @@ function Rem.damageNPC(npc, amount, attacker)
         z:setHealth(hp)
         npc.rec.hp = hp
         Rem.bark(npc, "hurt")
+        Rem.emit("npcDamaged", npc, amount, attacker)     -- (golpe forte pode ferir de verdade: Rem_Wounds)
     end
 end
 

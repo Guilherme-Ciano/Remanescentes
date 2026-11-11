@@ -56,6 +56,8 @@ function EV.fall(g)
     local store = Rem.getStore()
     local h = g.home
     store.turned = store.turned or {}
+    -- nem todo mundo morre: quem escapa vira refugiado (Rem_Refugees)
+    if Rem.Refugees then Rem.Refugees.flee(g) end
     for _, p in ipairs(members(g)) do
         table.insert(store.turned, { x = h.x + ZombRandFloat(-2, 2), y = h.y + ZombRandFloat(-2, 2), z = 0,
             outfit = p.outfit, female = p.female })
@@ -137,7 +139,7 @@ function EV.daily()
             local list = members(g)
             local n = #list
             local h = g.home
-            if n > 0 and h and h.x1 and g.activity == "home" and not onScene(list) then
+            if n > 0 and h and h.x1 and g.activity == "home" and not onScene(list) and not g.player then
                 -- fortificar aos poucos
                 if (g.supplies or 0) >= n then
                     h.fortifyLevel = math.min(CFG.MAX_LEVEL, (h.fortifyLevel or 0) + (hasEngineer(list) and 2 or 1))
@@ -145,6 +147,7 @@ function EV.daily()
                 -- cair para uma horda
                 local p = CFG.FALL_PERMILLE * ((n <= CFG.SMALL_GROUP) and 2 or 1)
                     * math.max(0, 1 - (h.fortifyLevel or 0) * CFG.LEVEL_PROTECTION) * Rem.cfg("BaseFallRate", 100) / 100
+                    * (Rem.BaseBuild and math.max(0.1, 1 - Rem.BaseBuild.structureBonus(g) / 6.5) or 1)   -- obras protegem
                 if ZombRand(1000) < p then
                     EV.fall(g)
                 elseif (g.faction == "civis" or g.faction == "sobreviventes" or g.faction == "seita")

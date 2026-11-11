@@ -1,8 +1,8 @@
 {
-    "Sandbox_Remanescentes": "Remanescentes: Survivors",
-    "Sandbox_RemanescentesMundo": "Remanescentes: World",
-    "Sandbox_RemanescentesZumbis": "Remanescentes: Zombies",
-    "Sandbox_RemanescentesTeste": "Remanescentes: Testing",
+    "Sandbox_Remanescentes": "First Days: Survivors",
+    "Sandbox_RemanescentesMundo": "First Days: World",
+    "Sandbox_RemanescentesZumbis": "First Days: Zombies",
+    "Sandbox_RemanescentesTeste": "First Days: Testing",
     "Sandbox_Remanescentes_NPCDifficulty": "Survivor difficulty",
     "Sandbox_Remanescentes_NPCDifficulty_tooltip": "How much damage survivors deal to you, how well they shoot and how far they see you.",
     "Sandbox_Remanescentes_NPCDifficulty_option1": "Easy",
@@ -64,5 +64,7 @@
     "Sandbox_Remanescentes_DebugMenu": "Testing tools on right-click",
     "Sandbox_Remanescentes_DebugMenu_tooltip": "Shows the 'Testing tools' submenu (spawn survivors, groups, events, teleport, simulate time). Off for normal play.",
     "Sandbox_Remanescentes_Verbose": "Verbose log",
-    "Sandbox_Remanescentes_Verbose_tooltip": "Writes what survivors and groups do to console.txt (useful when reporting problems)."
+    "Sandbox_Remanescentes_Verbose_tooltip": "Writes what survivors and groups do to console.txt (useful when reporting problems).",
+    "Sandbox_Remanescentes_NPCBaseWork": "Group construction (percent)",
+    "Sandbox_Remanescentes_NPCBaseWork_tooltip": "How much NPC groups work on their own bases: planks, fences, barbed wire, cars in the streets. 0 turns it off; 100 is the same pace as your base."
 }

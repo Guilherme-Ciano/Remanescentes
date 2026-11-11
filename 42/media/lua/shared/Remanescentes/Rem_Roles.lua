@@ -192,7 +192,7 @@ function RO.healPlayer(medic, player, now)
 end
 
 function RO.medicBehavior(npc, ctx, now)
-    if npc.rec.archetype ~= "medico" or ctx.enemy then return false end
+    if (npc.rec.archetype ~= "medico" and npc.rec.job ~= "heal") or ctx.enemy then return false end
     if now < (npc.nextHeal or 0) then return false end
     -- seu aliado medico cuida de voce
     local player = ctx.player

@@ -22,7 +22,7 @@ for _, t in ipairs(Rem.Profile.TRAITS) do
 end
 check(okTraits, "personalidade: 5 tracos de 0 a 10")
 check(r.moral and r.fome == 0 and r.cansaco == 0, "estado inicial (moral, fome, cansaco)")
-check(Rem.temperOf(civ) == "medroso", "civil e medroso")
+check((Rem.temperOf(civ) == "medroso") == (civ.rec.personality.coragem < 6), "civil e medroso (a menos que seja de fibra)")
 check(type(Rem.profileText(r)) == "string", "texto da ficha")
 
 local cop = Rem.spawn(3006, 3005, 0, { faction = "civis", profession = "base:policeofficer", archetype = "atirador" })

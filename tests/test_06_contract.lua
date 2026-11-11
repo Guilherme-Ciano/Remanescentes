@@ -259,7 +259,7 @@ Rem.unregisterNpcOption("ContextMenu_Teste_Hostil")
 
 realPrint("29) Constantes publicas (CFG) com os valores de antes, lidas no uso")
 check(Rem.Brain.CFG.THINK_MS == 250 and Rem.Brain.CFG.FOLLOW_DIST == 3 and Rem.Brain.CFG.REPATH_MS == 1000
-    and Rem.Brain.CFG.OUTNUMBERED.cauteloso == 4, "Rem.Brain.CFG")
+    and Rem.Tactics.CFG.ZOMBIES_PER_POWER == 2.0, "Rem.Brain.CFG / Rem.Tactics.CFG")
 check(Rem.World.CFG.TRAVEL_PER_HOUR == 300 and Rem.Scene.CFG.SPAWN_RADIUS == 45 and Rem.Scene.CFG.DESPAWN_RADIUS == 70,
     "Rem.World.CFG / Rem.Scene.CFG")
 check(Rem.Perception.CFG.PERCEIVE_MS == 500 and Rem.Combat.CFG.ATTACK_COOLDOWN_MS == 1100 and Rem.Barks.CFG.GLOBAL_CD == 6000,
