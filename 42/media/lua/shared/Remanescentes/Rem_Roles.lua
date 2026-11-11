@@ -126,7 +126,10 @@ function RO.roleBehavior(npc, ctx, now)
         end
     end
     -- morador de dia: de vez em quando senta para descansar um pouco
-    if rec.role == "morador" and not isNight() then
+    -- (so dentro de casa: longe dela, primeiro volta - antes sentava no meio da rua)
+    local atHome = npc.z:getX() >= h.x1 - 1 and npc.z:getX() <= h.x2 + 1 and npc.z:getY() >= h.y1 - 1 and npc.z:getY() <= h.y2 + 1
+    if rec.role == "morador" and not isNight() and not atHome and npc.rest == "sit" then Rem.clearRest(npc) end
+    if rec.role == "morador" and not isNight() and atHome then
         if npc.rest == "sit" and now < (npc.restUntil or 0) then return true end
         if npc.rest == "sit" then Rem.clearRest(npc) end
         if not Rem.isMoving(npc) and ZombRand(RO.CFG.SIT_ODDS) == 0 then

@@ -112,6 +112,13 @@ a1.z.x, a1.z.y = hs.x + 6, hs.y + 30
 a1.z.path = nil
 tick(300, 2)
 check(a1.z.path and math.abs(a1.z.path[2] - g.home.y) < 6, "vai ate a base")
+Rem.setRest(a1, "sit")
+a1.z.path, a1.nextPath, a1.lastPathX = nil, 0, nil
+local realRandSit = ZombRand
+ZombRand = function(a, b) if b then return realRandSit(a, b) end return 0 end   -- (o sorteio de sentar sempre "sim")
+tick(300, 2)
+ZombRand = realRandSit
+check(a1.rest ~= "sit" and a1.z.path ~= nil, "longe de casa, nao senta no meio da rua: levanta e volta")
 -- tarefa: vigia fica na porta
 a2.z.x, a2.z.y = hs.x + 1, hs.y + 1
 a2.z.path, a2.banterUntil, a2.banterWith = nil, nil, nil
